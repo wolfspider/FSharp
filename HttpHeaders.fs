@@ -84,7 +84,7 @@ type HttpHeadersBuilder () =
 
     member self.PushContinuation(value : string) =
         match lastseen with
-        | Some (h, v) -> lastseen <- Some (h, sprintf "%s %s" v (value.Trim ()))
+        | Some (h, v) -> lastseen <- Some (h, String.Format("{0} {1}", v, (value.Trim ())))
         | _ -> raise InvalidHttpHeaderContinuation
 
     member self.Headers

@@ -20,10 +20,10 @@ type HttpLogger () =
     static member Log level message =
         if level >= loglevel then begin
             HttpLogger.WriteLine
-                (sprintf "[Thread %4d] [%A] %s"
-                    Thread.CurrentThread.ManagedThreadId
-                    DateTime.Now
-                    message)
+                (String.Format("[Thread {0}] [{1}] {2}",
+                    Thread.CurrentThread.ManagedThreadId,
+                    DateTime.Now,
+                    message))
         end
 
     static member Debug message =

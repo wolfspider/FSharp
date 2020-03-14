@@ -43,21 +43,22 @@ type HttpClientHandler (server : HttpServer, peer : TcpClient) =
 
             noexn (fun () -> peer.Close ())
 
-    member private self.SendLine line =
-        let bytes = Encoding.ASCII.GetBytes(sprintf "%s\r\n" line) in
-            HttpLogger.Debug ("--> " + line);
-            stream.Write(bytes, 0, bytes.Length)
+    member private self.SendLine (line: string) =
+        let line = String.Format("{0}\r\n",line)
+        let bytes = Encoding.ASCII.GetBytes(line)
+        HttpLogger.Debug ("--> " + line)
+        stream.Write(bytes, 0, bytes.Length)
 
     member private self.SendStatus version code =
         self.SendLine
-            (sprintf "HTTP/%s %d %s"
-                (string_of_httpversion version)
-                (HttpCode.code code)
-                (HttpCode.http_status code))
+            (String.Format("HTTP/{0} {1} {2}",
+                (string_of_httpversion version),
+                (HttpCode.code code),
+                (HttpCode.http_status code)))
 
     member private self.SendHeaders (headers : seq<string * string>) =
         headers |>
-            Seq.iter(fun (h, v) -> self.SendLine (sprintf "%s: %s" h v))
+            Seq.iter(fun (h, v) -> self.SendLine (String.Format("{0}: {1}", h, v)))
 
     member private self.SendResponseWithBody version code headers (body : byte[]) =
         self.SendStatus  version code;
@@ -150,7 +151,7 @@ type HttpClientHandler (server : HttpServer, peer : TcpClient) =
                     if close then begin
                         response.headers.Set "Connection" "close"
                     end;
-                    response.headers.Set "Content-Length" (sprintf "%d" (http_body_length response.body));
+                    response.headers.Set "Content-Length" (String.Format("{0}",(http_body_length response.body)));
                     begin
                         match response.body with
                         | HB_Raw bytes ->
@@ -185,7 +186,7 @@ type HttpClientHandler (server : HttpServer, peer : TcpClient) =
         try
             try
                 HttpLogger.Info
-                    (sprintf "new connection from [%A]" peer.Client.RemoteEndPoint);
+                    (String.Format("new connection from [{0}]",peer.Client.RemoteEndPoint));
                 rawstream <- peer.GetStream ();
                 
                 HttpLogger.Info "Plaintext connection"
@@ -249,7 +250,7 @@ and HttpServer (localaddr : IPEndPoint, config : HttpServerConfig) =
             raise (InvalidOperationException ())
         end;
 
-        HttpLogger.Info (sprintf "Starting HTTP server on port %d" localaddr.Port);
+        HttpLogger.Info (String.Format("Starting HTTP server on port {0}",localaddr.Port));
         socket <- TcpListener localaddr;
         try
             socket.Start ();

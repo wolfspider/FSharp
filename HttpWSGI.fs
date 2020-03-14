@@ -128,7 +128,7 @@ type WsgiHandler () =
         use lock   = new WsgiEngineLock () in
         use bridge = PythonEngine.ImportModule ("wsgibridge") in
         let error  = System.Console.Error in
-        let url    = sprintf "https://%s/%s" config.servname request.path in
+        let url    = String.Format("https://{0}/{1}", config.servname, request.path) in
 
         let sinfo =
             try
@@ -139,7 +139,7 @@ type WsgiHandler () =
                       ("compression" , Map.find sinfo.compression cp_map :> obj);
                       ("version"     , Map.find sinfo.protocol_version vr_map :> obj);
                       ("session-hash", Bytes.hexString sinfo.session_hash :> obj);
-                      ("session-extensions", Printf.sprintf "%A" sinfo.extensions :> obj);
+                      ("session-extensions", String.Format("{0}", sinfo.extensions) :> obj);
                     ]
                         |> Map.ofList
                 in
