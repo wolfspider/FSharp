@@ -11,7 +11,6 @@
     <Compile Include="HttpHeaders.fs" />
     <Compile Include="HttpData.fs" />
     <Compile Include="HttpStreamReader.fs" />
-    <Compile Include="HttpWSGI.fs" Condition="'$(USEWSGI)' != ''" />
     <Compile Include="HttpServer.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>

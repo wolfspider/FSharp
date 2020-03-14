@@ -14,10 +14,6 @@ open HttpData
 open HttpLogger
 open Utils
 
-#if wsgi
-open HttpWSGI
-#endif
-
 exception HttpResponseExn of HttpResponse
 
 let HttpResponseExnWithCode = fun code ->
@@ -83,21 +79,7 @@ type HttpClientHandler (server : HttpServer, peer : TcpClient) =
               headers = HttpHeaders.OfList [(HttpHeaders.CONTENT_TYPE, ctype)];
               body    = HB_Stream (stream, fi.Length) }
 
-#if wsgi
-    member private self.ServeWsgi (request : HttpRequest) =
-        HttpWSGI.WsgiHandler.entry server.Config request stream
-
-    member private self.WsgiHandler (request : HttpRequest) =
-        let path   = HttpServer.CanonicalPath request.path in
-        let wsgire = new Regex(@"^wsgi(:?/|$)") in
-
-            if wsgire.IsMatch(path) then
-                self.ServeWsgi(request)
-                Some false (* No keep-alive *)
-            else
-                None
-#endif
-
+              
     member private self.ServeStatic (request : HttpRequest) =
         let path = HttpServer.CanonicalPath request.path in
         let path = if path.Equals("") then "index.html" else path
@@ -179,10 +161,7 @@ type HttpClientHandler (server : HttpServer, peer : TcpClient) =
             false (* no keep-alive *)
 
     member self.Start () =
-#if wsgi
-        handlers <- self.WsgiHandler :: handlers
-#endif
-
+        
         try
             try
                 HttpLogger.Info
@@ -263,8 +242,5 @@ and HttpServer (localaddr : IPEndPoint, config : HttpServerConfig) =
             socket <- null
 
 let run = fun config ->
-#if wsgi
-    use wsgi = new WsgiHandler ()
-#endif
     use http = new HttpServer (config.localaddr, config)
     http.Start ()
