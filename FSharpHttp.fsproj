@@ -4,6 +4,7 @@
     <TargetFramework>netcoreapp3.1</TargetFramework>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Include="Fiber.fs" />
     <Compile Include="Utils.fs" />
     <Compile Include="Mime.fs" />
     <Compile Include="HttpLogger.fs" />

@@ -13,6 +13,7 @@ open HttpStreamReader
 open HttpData
 open HttpLogger
 open Utils
+open Fiber
 
 exception HttpResponseExn of HttpResponse
 
@@ -212,13 +213,34 @@ and HttpServer (localaddr : IPEndPoint, config : HttpServerConfig) =
         handler.Start()
 
     member private self.AcceptAndServe () =
+        let inline millis n = TimeSpan.FromMilliseconds (float n)
+        let inline secs n = TimeSpan.FromSeconds (float n)
+        let fib = FiberBuilder()
+        
         while true do
-
+            //TODO: convert from threads to fibers
             let peer = socket.AcceptTcpClient() in
                 try
-                    let thread = Thread(ThreadStart(self.ClientHandler peer)) in
+                    let program = fib {
+                        let a = fib {  
+                          let thread = Thread(ThreadStart(self.ClientHandler peer)) in
+                          thread.IsBackground <- true;
+                          thread.Start()
+                          return thread
+                        }
+                        let! b = a |> Fiber.timeout (secs 8)
+                        return b
+                    }
+                    let cancel = Cancel ()
+                    let result = Scheduler.test(cancel, program)
+                    let rs =
+                        match result with
+                        | Some (Ok value) -> value
+                        
+                    HttpLogger.HttpLogger.Info (String.Format("Scheduler Result: {0}", rs.Name))
+                    (*let thread = Thread(ThreadStart(self.ClientHandler peer)) in
                         thread.IsBackground <- true;
-                        thread.Start()
+                        thread.Start()*)
                 with
                 | e ->
                     noexn (fun () -> peer.Close())
