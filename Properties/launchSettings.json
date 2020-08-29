@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "FSharpHttp": {
+      "commandName": "Project",
+      "nativeDebugging": true
+    }
+  }
+}
