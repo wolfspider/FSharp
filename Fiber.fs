@@ -186,12 +186,12 @@ module Fiber =
     let mutable res = None
     s.Schedule(fun () -> fn (s, cancel) (fun result ->
       if not cancel.Cancelled then
-        //swap counter (fun f -> (fun result () -> result + 1) <| f()) |> ignore
-        Interlocked.Exchange(&res, Some result) |> ignore
+        swap counter (fun f -> (fun result () -> result + 1) <| f()) |> ignore
+        //Interlocked.Exchange(&res, Some result) |> ignore
       waiter.Set()))
     waiter.Wait()
     let value = (!counter)()
-    res.Value
+    value
 
     
   /// Converts given Fiber into F# Async.

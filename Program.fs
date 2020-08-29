@@ -51,13 +51,8 @@ let _ =
       return b }
     let cancel = Cancel ()
     let result = Scheduler.test(cancel, program)
-    let rs =
-      match result with
-      | Some (Ok value) -> value
-      | Some (Error exn) -> 0
-      | None -> 0
-      
-    HttpLogger.HttpLogger.Info (String.Format("Scheduler Result: {0}", rs))
+    
+    HttpLogger.HttpLogger.Info (String.Format("Scheduler Result: {0}", result))
     Console.ReadLine () |> ignore
     
 

@@ -223,21 +223,20 @@ and HttpServer (localaddr : IPEndPoint, config : HttpServerConfig) =
                 try
                     let program = fib {
                         let a = fib {  
-                          let thread = Thread(ThreadStart(self.ClientHandler peer)) in
+                          (*let thread = Thread(ThreadStart(self.ClientHandler peer)) in
                           thread.IsBackground <- true;
-                          thread.Start()
-                          return thread
+                          thread.Start()*)
+                          let handler = new HttpClientHandler (self, peer)
+                          handler.Start()
+                          return handler
                         }
                         let! b = a |> Fiber.timeout (secs 8)
                         return b
                     }
                     let cancel = Cancel ()
                     let result = Scheduler.test(cancel, program)
-                    let rs =
-                        match result with
-                        | Some (Ok value) -> value
-                        
-                    HttpLogger.HttpLogger.Info (String.Format("Scheduler Result: {0}", rs.Name))
+                    
+                    HttpLogger.HttpLogger.Info (String.Format("Scheduler Result: {0}", result))
                     (*let thread = Thread(ThreadStart(self.ClientHandler peer)) in
                         thread.IsBackground <- true;
                         thread.Start()*)
