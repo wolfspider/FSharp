@@ -25,7 +25,7 @@ type HttpStreamReader (stream : Stream) =
 
     interface IDisposable with
         member self.Dispose () =
-           if stream <> null then
+           if not (isNull stream) then
                 Utils.noexn (fun () -> stream.Close ())
 
     member private self.EnsureAvailable () =
@@ -74,13 +74,13 @@ type HttpStreamReader (stream : Stream) =
         let (*---*) headers = HttpHeadersBuilder () in
         let (*---*) isvalid = ref true in
 
-            if httpcmd = null then begin
+            if isNull httpcmd then begin
                 raise NoHttpRequest
             end;
 
             let rec readheaders = fun () ->
                 let line = self.ReadLine() in
-                    if line = null then
+                    if isNull line then
                         isvalid := false
                     elif line <> "" then
                         try
@@ -97,7 +97,7 @@ type HttpStreamReader (stream : Stream) =
             in
                 readheaders();
 
-                if httpcmd = null then begin
+                if isNull httpcmd then begin
                     isvalid := false; httpcmd <- ""
                 end;
                 if not !isvalid then begin

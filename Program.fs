@@ -50,9 +50,14 @@ let _ =
       HttpLogger.HttpLogger.Info (String.Format("Fiber Results: {0} {1}",b,ch))
       return b }
     let cancel = Cancel ()
-    let result = Scheduler.test(cancel, program)
-    
-    HttpLogger.HttpLogger.Info (String.Format("Scheduler Result: {0}", result))
+    let result = Scheduler.test(program, cancel)
+    let valu = result.Value
+    let rs = 
+      match valu with
+      | Ok fn -> fn.ToString()
+      | Error exn -> exn.ToString()
+ 
+    HttpLogger.HttpLogger.Info (String.Format("Scheduler Result: {0}", rs))
     Console.ReadLine () |> ignore
     
 

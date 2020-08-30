@@ -186,12 +186,13 @@ module Fiber =
     let mutable res = None
     s.Schedule(fun () -> fn (s, cancel) (fun result ->
       if not cancel.Cancelled then
-        swap counter (fun f -> (fun result () -> result + 1) <| f()) |> ignore
-        //Interlocked.Exchange(&res, Some result) |> ignore
+        //swap counter (fun f -> (fun result () -> result + 1) <| f()) |> ignore
+        Interlocked.Exchange(&res, Some result) |> ignore
       waiter.Set()))
     waiter.Wait()
-    let value = (!counter)()
-    value
+    res.Value
+    //let value = (!counter)()
+    //value
 
     
   /// Converts given Fiber into F# Async.
@@ -245,9 +246,14 @@ module Scheduler =
           run ()
       member this.Delay (timeout: TimeSpan, fn) = schedule timeout.Ticks fn
 
-  let test(cancel, fiber) = 
+  let testasync(fiber, cancel) = 
+    let s = TestScheduler(DateTime.UtcNow)
+    Fiber.toAsync s fiber
+  
+  let test(fiber, cancel) = 
     let s = TestScheduler(DateTime.UtcNow)
     Fiber.blocking s cancel fiber
+    
  
 [<Struct>]
 type FiberBuilder =

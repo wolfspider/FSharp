@@ -15,10 +15,10 @@ open HttpLogger
 open Utils
 open Fiber
 
-exception HttpResponseExn of HttpResponse
+exception HttpResponseExnException of HttpResponse
 
 let HttpResponseExnWithCode = fun code ->
-    HttpResponseExn (http_response_of_code code)
+    HttpResponseExnException (http_response_of_code code)
 
 type HttpClientHandler (server : HttpServer, peer : TcpClient) =
     let mutable rawstream : NetworkStream    = null
@@ -29,9 +29,9 @@ type HttpClientHandler (server : HttpServer, peer : TcpClient) =
 
     interface IDisposable with
         member self.Dispose () =
-            if stream <> null then
+            if not (isNull stream) then
                 noexn (fun () -> rawstream.Dispose ());
-            if rawstream <> null then
+            if not (isNull rawstream) then
                 noexn (fun () -> rawstream.Dispose ());
 
             rawstream <- null
@@ -128,7 +128,7 @@ type HttpClientHandler (server : HttpServer, peer : TcpClient) =
                     try self.ServeStatic request
                     with
                     | :? System.IO.IOException as e -> raise e
-                    | HttpResponseExn response -> response
+                    | HttpResponseExnException response -> response
                     | e -> http_response_of_code HttpCode.HTTP_500
                 in
                     if close then begin
@@ -146,6 +146,8 @@ type HttpClientHandler (server : HttpServer, peer : TcpClient) =
                                 self.SendHeaders (response.headers.ToSeq ());
                                 self.SendLine "";
                                 try
+                                    (*if isNull (f.CopyToAsync(stream, (int)flen, CancellationToken())) then
+                                        failwith "null stream"*)
                                     if f.CopyTo(stream, flen) < flen then
                                         failwith "ReadAndServeRequest: short-read"
                                 finally
@@ -187,7 +189,7 @@ and HttpServer (localaddr : IPEndPoint, config : HttpServerConfig) =
 
     interface IDisposable with
         member self.Dispose () =
-            if socket <> null then noexn (fun () -> socket.Stop ())
+            if not (isNull socket) then noexn (fun () -> socket.Stop ())
 
     member self.Config
         with get () = config
@@ -234,7 +236,7 @@ and HttpServer (localaddr : IPEndPoint, config : HttpServerConfig) =
                         return b
                     }
                     let cancel = Cancel ()
-                    let result = Scheduler.test(cancel, program)
+                    let result = Scheduler.testasync(program, cancel)
                     
                     HttpLogger.HttpLogger.Info (String.Format("Scheduler Result: {0}", result))
                     (*let thread = Thread(ThreadStart(self.ClientHandler peer)) in
@@ -246,7 +248,7 @@ and HttpServer (localaddr : IPEndPoint, config : HttpServerConfig) =
                     Console.WriteLine(e.Message)
 
     member self.Start () =
-        if socket <> null then begin
+        if not (isNull socket) then begin
             raise (InvalidOperationException ())
         end;
 
