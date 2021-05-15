@@ -65,7 +65,7 @@ type HttpStreamReader (stream : Stream) =
         if eof && (output.Length = 0)
         then null
         else begin
-            HttpLogger.Debug ("<-- " + (output.ToString ()));
+            (*HttpLogger.Debug ("<-- " + (output.ToString ()));*)
             output.ToString ()
         end
 

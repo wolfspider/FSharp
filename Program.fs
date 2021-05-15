@@ -27,7 +27,7 @@ type options = {
 }
 
 let _ =
-    HttpLogger.HttpLogger.Level <- HttpLogger.DEBUG;
+    HttpLogger.HttpLogger.Level <- HttpLogger.INFO;
 
     let fib = FiberBuilder()
     let inline millis n = TimeSpan.FromMilliseconds (float n)

@@ -43,7 +43,7 @@ type HttpClientHandler (server : HttpServer, peer : TcpClient) =
     member private self.SendLine (line: string) =
         let line = String.Format("{0}\r\n",line)
         let bytes = Encoding.ASCII.GetBytes(line)
-        HttpLogger.Debug ("--> " + line)
+        (*HttpLogger.Debug ("--> " + line)*)
         stream.Write(bytes, 0, bytes.Length)
 
     member private self.SendStatus version code =
@@ -167,11 +167,11 @@ type HttpClientHandler (server : HttpServer, peer : TcpClient) =
         
         try
             try
-                HttpLogger.Info
-                    (String.Format("new connection from [{0}]",peer.Client.RemoteEndPoint));
+                (*HttpLogger.Info
+                    (String.Format("new connection from [{0}]",peer.Client.RemoteEndPoint))*)
                 rawstream <- peer.GetStream ();
                 
-                HttpLogger.Info "Plaintext connection"
+                (*HttpLogger.Info "Plaintext connection"*)
                 stream <- rawstream
                 
                 reader <- new HttpStreamReader(stream);
@@ -180,7 +180,7 @@ type HttpClientHandler (server : HttpServer, peer : TcpClient) =
             | e ->
                 Console.WriteLine(e.Message)
         finally
-            HttpLogger.Info "closing connection";
+            (*HttpLogger.Info "closing connection";*)
             noexn (fun () -> peer.Close ())
 
 and HttpServer (localaddr : IPEndPoint, config : HttpServerConfig) =
@@ -225,9 +225,6 @@ and HttpServer (localaddr : IPEndPoint, config : HttpServerConfig) =
                 try
                     let program = fib {
                         let a = fib {  
-                          (*let thread = Thread(ThreadStart(self.ClientHandler peer)) in
-                          thread.IsBackground <- true;
-                          thread.Start()*)
                           let handler = new HttpClientHandler (self, peer)
                           handler.Start()
                           return handler
@@ -238,7 +235,7 @@ and HttpServer (localaddr : IPEndPoint, config : HttpServerConfig) =
                     let cancel = Cancel ()
                     let result = Scheduler.testasync(program, cancel)
                     
-                    HttpLogger.HttpLogger.Info (String.Format("Scheduler Result: {0}", result))
+                    HttpLogger.HttpLogger.Debug (String.Format("Scheduler Result: {0}", result))
                     (*let thread = Thread(ThreadStart(self.ClientHandler peer)) in
                         thread.IsBackground <- true;
                         thread.Start()*)
