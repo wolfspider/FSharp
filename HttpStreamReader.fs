@@ -81,7 +81,7 @@ type HttpStreamReader (stream : Stream) =
             let rec readheaders = fun () ->
                 let line = self.ReadLine() in
                     if isNull line then
-                        isvalid := false
+                        isvalid.Value <- false
                     elif line <> "" then
                         try
                             match line.Trim() with
@@ -89,21 +89,22 @@ type HttpStreamReader (stream : Stream) =
                                 headers.Push m.["name"] m.["value"]
                             | Match "^\s+(?<value>.*)\s+$" m ->
                                 headers.PushContinuation m.["value"]
-                            | _ -> isvalid := false
+                            | _ -> isvalid.Value <- false
                         with InvalidHttpHeaderContinuation ->
-                            isvalid := false
+                            isvalid.Value <- false
 
                         readheaders ()
             in
                 readheaders();
 
                 if isNull httpcmd then begin
-                    isvalid := false; httpcmd <- ""
+                    isvalid.Value <- false; httpcmd <- ""
                 end;
-                if not !isvalid then begin
+                if not isvalid.Value then begin
                     raise InvalidHttpRequest
                 end;
 
+                
                 match httpcmd with
                 | Match "^(?<method>[A-Z]+) (?<path>\S+) HTTP/(?<version>(:?\d+\.\d+))$" m ->
                     let version = httpversion_of_string m.["version"] in
@@ -115,5 +116,4 @@ type HttpStreamReader (stream : Stream) =
                           mthod   = httpmth ;
                           path    = path    ;
                           headers = headers }
-
                 | _ -> raise InvalidHttpRequest

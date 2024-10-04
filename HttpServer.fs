@@ -5,17 +5,68 @@ open System.IO
 open System.Net
 open System.Net.Sockets
 open System.Text
-open System.Text.RegularExpressions
-open System.Threading
 
 open HttpHeaders
 open HttpStreamReader
 open HttpData
 open HttpLogger
 open Utils
+open System.Threading
 open Fiber
 
 exception HttpResponseExnException of HttpResponse
+
+type Socket with
+  member socket.AsyncAccept() = Async.FromBeginEnd(socket.BeginAccept, socket.EndAccept)
+  member socket.AsyncReceive(buffer:byte[], ?offset, ?count) =
+    let offset = defaultArg offset 0
+    let count = defaultArg count buffer.Length
+    let beginReceive(b,o,c,cb,s) = socket.BeginReceive(b,o,c,SocketFlags.None,cb,s)
+    Async.FromBeginEnd(buffer, offset, count, beginReceive, socket.EndReceive)
+  member socket.AsyncSend(buffer:byte[], ?offset, ?count) =
+    let offset = defaultArg offset 0
+    let count = defaultArg count buffer.Length
+    let beginSend(b,o,c,cb,s) = socket.BeginSend(b,o,c,SocketFlags.None,cb,s)
+    Async.FromBeginEnd(buffer, offset, count, beginSend, socket.EndSend)
+
+type Server() =
+  static member Start(hostname:string, ?port) =
+    let ipAddress = Dns.GetHostEntry(hostname).AddressList.[0]
+    Server.Start(ipAddress, ?port = port)
+
+  static member Start(?ipAddress, ?port) =
+    let ipAddress = defaultArg ipAddress IPAddress.Any
+    let port = defaultArg port 80
+    let endpoint = IPEndPoint(ipAddress, port)
+    let cts = new CancellationTokenSource()
+    let listener = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp)
+    listener.Bind(endpoint)
+    listener.Listen(int SocketOptionName.MaxConnections)
+    printfn "Started listening on port %d" port
+    
+    let rec loop() = async {
+      //printfn "Waiting for request ..."
+      let! socket = listener.AsyncAccept()
+      //printfn "Received request"
+      let response = [|
+        "HTTP/1.1 200 OK\r\n"B
+        "Content-Type: text/plain\r\n"B
+        "\r\n"B
+        "Hello World!"B |] |> Array.concat
+      try
+        try
+          //let! bytesSent = socket.AsyncSend(response)
+          //printfn "Sent response"
+          let! bytesSent = socket.AsyncSend(response)
+          ()
+        with e -> printfn "An error occurred: %s" e.Message
+      finally
+        socket.Shutdown(SocketShutdown.Both)
+        socket.Close()
+      return! loop() }
+
+    Async.Start(loop(), cancellationToken = cts.Token)
+    { new IDisposable with member x.Dispose() = cts.Cancel(); listener.Close() }
 
 let HttpResponseExnWithCode = fun code ->
     HttpResponseExnException (http_response_of_code code)
@@ -121,7 +172,7 @@ type HttpClientHandler (server : HttpServer, peer : TcpClient) =
                 let close =
                     match request.headers.Get "Connection" with
                     | Some v when v.ToLowerInvariant() = "close" -> true
-                    | Some v when v.ToLowerInvariant() = "keep-alive" -> false
+                    | Some v when v.ToLowerInvariant() = "keep-alive" -> true
                     | _ -> request.version <> HTTPV_11
                 in
                 let response =
@@ -169,6 +220,7 @@ type HttpClientHandler (server : HttpServer, peer : TcpClient) =
             try
                 (*HttpLogger.Info
                     (String.Format("new connection from [{0}]",peer.Client.RemoteEndPoint))*)
+                peer.Client.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.KeepAlive, true)
                 rawstream <- peer.GetStream ();
                 
                 (*HttpLogger.Info "Plaintext connection"*)
@@ -184,8 +236,8 @@ type HttpClientHandler (server : HttpServer, peer : TcpClient) =
             noexn (fun () -> peer.Close ())
 
 and HttpServer (localaddr : IPEndPoint, config : HttpServerConfig) =
-    let (*---*) config : HttpServerConfig = config
-    let mutable socket : TcpListener      = null
+    let config : HttpServerConfig = config
+    let mutable socket : TcpListener = null
 
     interface IDisposable with
         member self.Dispose () =
@@ -214,48 +266,57 @@ and HttpServer (localaddr : IPEndPoint, config : HttpServerConfig) =
         use handler = new HttpClientHandler (self, peer)
         handler.Start()
 
+
     member private self.AcceptAndServe () =
-        let inline millis n = TimeSpan.FromMilliseconds (float n)
-        let inline secs n = TimeSpan.FromSeconds (float n)
-        let fib = FiberBuilder()
+        //let inline millis n = TimeSpan.FromMilliseconds (float n)
+        //let inline secs n = TimeSpan.FromSeconds (float n)
+        //let fib = FiberBuilder()
         
         while true do
+                 
             //TODO: convert from threads to fibers
             let peer = socket.AcceptTcpClient() in
-                try
-                    let program = fib {
-                        let a = fib {  
-                          let handler = new HttpClientHandler (self, peer)
-                          handler.Start()
-                          return handler
-                        }
-                        let! b = a |> Fiber.timeout (secs 8)
-                        return b
-                    }
-                    let cancel = Cancel ()
-                    let result = Scheduler.testasync(program, cancel)
-                    
-                    HttpLogger.HttpLogger.Debug (String.Format("Scheduler Result: {0}", result))
-                    (*let thread = Thread(ThreadStart(self.ClientHandler peer)) in
-                        thread.IsBackground <- true;
-                        thread.Start()*)
-                with
-                | e ->
-                    noexn (fun () -> peer.Close())
-                    Console.WriteLine(e.Message)
+            try
+                use handler = new HttpClientHandler(self, peer) // Ensure handler is disposed of after usage
+                handler.Start()
 
+                let program = fib {
+                    let! b = Fiber.timeout (TimeSpan.FromDays(1)) (fib { return handler })
+                    return b
+                }
+
+                let cancel = Cancel()
+                let result = async {
+                    try
+                        let! _ = Scheduler.testasync(program, cancel) // Discard the result of testasync
+                        return () // Explicitly return unit
+                    with
+                    | ex -> 
+                        HttpLogger.HttpLogger.Debug (String.Format("Error: {0}", ex.Message))
+                        raise ex
+                } 
+                // Start the async workflow, ensuring the result is processed
+                Async.StartAsTask result |> Async.AwaitTask |> ignore
+
+            finally
+                peer.Close()
+                
     member self.Start () =
         if not (isNull socket) then begin
             raise (InvalidOperationException ())
         end;
 
         HttpLogger.Info (String.Format("Starting HTTP server on port {0}",localaddr.Port));
-        socket <- TcpListener localaddr;
+        socket <- new TcpListener(localaddr);
         try
             socket.Start ();
             socket.Server.SetSocketOption(SocketOptionLevel.Socket,
                                           SocketOptionName.ReuseAddress,
                                           true);
+            socket.Server.SetSocketOption(SocketOptionLevel.Socket,
+                                          SocketOptionName.KeepAlive,
+                                          true);
+            
             self.AcceptAndServe ()
         finally
             noexn (fun () -> socket.Stop ())

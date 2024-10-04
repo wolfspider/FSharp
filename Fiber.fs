@@ -161,12 +161,12 @@ module Fiber =
       let refCell = ref value
       
       let rec swap f = 
-          let currentValue = !refCell
+          let currentValue = refCell.Value
           let result = Interlocked.CompareExchange<'T>(refCell, f currentValue, currentValue)
           if obj.ReferenceEquals(result, currentValue) then result
           else Thread.SpinWait 20; swap f
           
-      member self.Value with get() = !refCell
+      member self.Value with get() = refCell.Value
       member self.Swap (f : 'T -> 'T) = swap f
   let atom value = 
       new Atom<_>(value)
@@ -247,8 +247,12 @@ module Scheduler =
       member this.Delay (timeout: TimeSpan, fn) = schedule timeout.Ticks fn
 
   let testasync(fiber, cancel) = 
-    let s = TestScheduler(DateTime.UtcNow)
-    Fiber.toAsync s fiber
+    async {
+        let sh = shared
+        //let s = TestScheduler(DateTime.UtcNow)
+        return! Fiber.toAsync sh fiber
+    }
+    
   
   let test(fiber, cancel) = 
     let s = TestScheduler(DateTime.UtcNow)

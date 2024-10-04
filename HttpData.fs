@@ -1,6 +1,4 @@
 module HttpData
-
-open System
 open System.IO
 open System.Net
 open System.Text

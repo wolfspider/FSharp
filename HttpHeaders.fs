@@ -3,7 +3,6 @@ module HttpHeaders
 open System
 open System.Globalization
 
-open Utils
 
 let CONTENT_LENGTH = "Content-Length"
 let CONTENT_TYPE   = "Content-Type"
