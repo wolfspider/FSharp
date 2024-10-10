@@ -3,7 +3,6 @@ module Utils
 open System
 open System.IO
 open System.Web
-open Microsoft.FSharp.Reflection
 open FSharp.Control
 
 (* ------------------------------------------------------------------------ *)
@@ -67,23 +66,3 @@ module IO =
                 let! line = stream.ReadLineAsync() |> Async.AwaitTask
                 yield line
         }
-
-
-(* ------------------------------------------------------------------------ *)
-exception NotAValidEnumeration
-
-let enumeration<'T> () =
-    let t = typeof<'T>
-
-    if not (FSharpType.IsUnion(t)) then
-        raise NotAValidEnumeration
-
-    let cases = FSharpType.GetUnionCases(t)
-
-    if not (Array.forall (fun (c: UnionCaseInfo) -> c.GetFields().Length = 0) (FSharpType.GetUnionCases(t))) then
-        raise NotAValidEnumeration
-
-    let cases =
-        Array.map (fun (c: UnionCaseInfo) -> (FSharpValue.MakeUnion(c, [||]) :?> 'T), c.Name) cases in
-
-    cases
