@@ -3,7 +3,6 @@ module HttpStreamReader
 open System
 open System.IO
 open System.Text
-
 open HttpHeaders
 open HttpData
 open HttpLogger
@@ -48,7 +47,8 @@ type HttpStreamReader(stream: Stream) =
         while not eol do
             if self.EnsureAvailable() then
                 while position < available && not eol do
-                    let b = buffer.[position] in
+
+                    let b = Span<byte>(buffer).[position] in
                     let c = Convert.ToChar(b) in
 
                     position <- position + 1

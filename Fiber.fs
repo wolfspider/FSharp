@@ -215,6 +215,7 @@ module Fiber =
             else
                 delay (TimeSpan.FromTicks 20) |> ignore
                 swap f
+
         //if obj.ReferenceEquals(result, currentValue) then result
         //else Thread.SpinWait 20; swap f
         member _.Value = refCell.Value

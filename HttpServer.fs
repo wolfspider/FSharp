@@ -154,8 +154,17 @@ type HttpClientHandler(server: HttpServer, peer: TcpClient) =
                         try
                             (*if isNull (f.CopyToAsync(stream, (int)flen, CancellationToken())) then
                                         failwith "null stream"*)
-                            if f.CopyTo(stream, flen) < flen then
-                                failwith "ReadAndServeRequest: short-read"
+                            let fa = Fiber.atom (fun () -> f)
+
+                            Fiber.swap fa (fun f ->
+                                let result = f () // Executes 'f' and retrieves its result
+
+                                if result.CopyTo(stream, flen) < flen then
+                                    failwith "ReadAndServeRequest: short-read"
+
+                                f // Return the result if needed, or modify as appropriate
+                            )
+                            |> ignore // Ignore the return, focus on side effects
                         finally
                             noexn (fun () -> f.Close())
                 end

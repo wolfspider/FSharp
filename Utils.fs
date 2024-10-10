@@ -28,7 +28,6 @@ type Stream with
                     let s =
                         fib {
                             output.WriteAsync(buffer, 0, rr) |> ignore
-                            output.FlushAsync() |> ignore
                             position <- position + (int64 rr)
                             return ()
                         }
