@@ -9,7 +9,7 @@ open HttpData
 open HttpLogger
 open Utils
 
-exception InvalidHttpRequest
+exception InvalidHttpRequest of string
 exception NoHttpRequest
 
 type HttpStreamReader (stream : Stream) =
@@ -29,9 +29,11 @@ type HttpStreamReader (stream : Stream) =
                 Utils.noexn (fun () -> stream.Close ())
 
     member private self.EnsureAvailable () =
+          
         if position = available then begin
             position  <- 0
-            available <- stream.Read(buffer, 0, buffer.Length)
+            let str = stream.ReadAsync(buffer, 0, buffer.Length)
+            available <- str.Result
         end
         position < available
 
@@ -75,7 +77,7 @@ type HttpStreamReader (stream : Stream) =
         let (*---*) isvalid = ref true in
 
             if isNull httpcmd then begin
-                raise NoHttpRequest
+                ()
             end;
 
             let rec readheaders = fun () ->
@@ -101,10 +103,9 @@ type HttpStreamReader (stream : Stream) =
                     isvalid.Value <- false; httpcmd <- ""
                 end;
                 if not isvalid.Value then begin
-                    raise InvalidHttpRequest
+                    isvalid.Value <- false; httpcmd <- ""
                 end;
-
-                
+    
                 match httpcmd with
                 | Match "^(?<method>[A-Z]+) (?<path>\S+) HTTP/(?<version>(:?\d+\.\d+))$" m ->
                     let version = httpversion_of_string m.["version"] in
@@ -116,4 +117,13 @@ type HttpStreamReader (stream : Stream) =
                           mthod   = httpmth ;
                           path    = path    ;
                           headers = headers }
-                | _ -> raise InvalidHttpRequest
+                | _ ->
+                    let version = "" in
+                    let httpmth = "" in
+                    let path    = "" in
+                    let headers = headers.Headers in
+
+                        { version = httpversion_of_string version ;
+                          mthod   = httpmth ;
+                          path    = path    ;
+                          headers = headers } 

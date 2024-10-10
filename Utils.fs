@@ -3,6 +3,7 @@ open System
 open System.IO
 open System.Web
 open Microsoft.FSharp.Reflection
+open FSharp.Control
 
 (* ------------------------------------------------------------------------ *)
 type String with
@@ -16,11 +17,11 @@ type Stream with
         let mutable eof      : bool   = false in
             while not eof && (position < length) do
                 let remaining = min (int64 buffer.Length) (length - position) in
-                let rr = self.Read(buffer, 0, int remaining) in
+                let rr = self.ReadAsync(buffer, 0, int remaining).Result in
                     if rr = 0 then
                         eof <- true
                     else begin
-                        output.Write(buffer, 0, rr);
+                        output.WriteAsync(buffer, 0, rr) |> ignore;
                         position <- position + (int64 rr)
                     end
             done;
@@ -46,11 +47,15 @@ let (|Match|_|) pattern input =
         else None
 
 (* ------------------------------------------------------------------------ *)
+
 module IO =
-    let ReadAllLines (stream : StreamReader) = seq {
-        while not stream.EndOfStream do
-            yield stream.ReadLine ()
-    }
+    let ReadAllLinesAsync (stream : StreamReader) : AsyncSeq<string> = 
+        asyncSeq {
+            while not stream.EndOfStream do
+                let! line = stream.ReadLineAsync() |> Async.AwaitTask
+                yield line
+        }
+        
 
 (* ------------------------------------------------------------------------ *)
 exception NotAValidEnumeration

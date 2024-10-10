@@ -4,7 +4,7 @@ open System
 open System.IO
 open System.Text
 open System.Text.RegularExpressions
-
+open FSharp.Control
 type mime = string
 
 type MimeMap () =
@@ -37,13 +37,17 @@ let of_stream (stream : Stream) =
         let mime = MimeMap () in
 
         let _ =
-            for line in Utils.IO.ReadAllLines reader do
-                match process_line line with
-                | Some (ctype, exts) ->
-                    exts |> List.iter (fun ext -> mime.Bind ext ctype)
-                | None -> ()
-        in
-            mime
+            Utils.IO.ReadAllLinesAsync reader
+                |> AsyncSeq.iterAsync (fun line ->
+                    async {
+                        match process_line line with
+                        | Some (ctype, exts) ->
+                            exts |> List.iter (fun ext -> mime.Bind ext ctype)
+                        | None -> ()
+                    })
+                |> Async.RunSynchronously
+                    in
+                        mime
 
 let of_file (filename : string) =
     use stream = File.Open(filename, FileMode.Open, FileAccess.Read)
