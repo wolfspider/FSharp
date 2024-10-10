@@ -215,8 +215,8 @@ module Fiber =
                 Thread.SpinWait 20
                 swap f
 
-        member self.Value = refCell.Value
-        member self.Swap(f: 'T -> 'T) = swap f
+        member _.Value = refCell.Value
+        member _.Swap(f: 'T -> 'T) = swap f
 
     let atom value = new Atom<_>(value)
 
@@ -314,7 +314,7 @@ module Scheduler =
                     running <- true
                     run ()
 
-            member this.Delay(timeout: TimeSpan, fn) = schedule timeout.Ticks fn
+            member _.Delay(timeout: TimeSpan, fn) = schedule timeout.Ticks fn
 
     let testasync (fiber, cancel) =
         async {

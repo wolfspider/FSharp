@@ -21,12 +21,12 @@ type HttpHeaders() =
 
         aout
 
-    member self.ToSeq() = headers |> List.rev |> Seq.ofList
+    member _.ToSeq() = headers |> List.rev |> Seq.ofList
 
-    member self.Exists(key: string) =
+    member _.Exists(key: string) =
         let key = normkey (key) in headers |> List.exists (fun (k, _) -> normkey (k) = key)
 
-    member self.Get(key: string) =
+    member _.Get(key: string) =
         let key = normkey (key) in
 
         match headers |> List.tryFind (fun (k, _) -> normkey (k) = key) with
@@ -38,17 +38,17 @@ type HttpHeaders() =
         | None -> dfl
         | Some x -> x
 
-    member self.GetAll(key: string) =
+    member _.GetAll(key: string) =
         let key = normkey (key) in headers |> List.filter (fun (k, _) -> normkey (k) = key)
 
-    member self.Set (key: string) (value: string) =
+    member _.Set (key: string) (value: string) =
         let normed = normkey (key) in
         headers <- headers |> List.filter (fun (k, _) -> normkey (k) <> normed)
         headers <- (key, value) :: headers
 
-    member self.Add (key: string) (value: string) = headers <- (key, value) :: headers
+    member _.Add (key: string) (value: string) = headers <- (key, value) :: headers
 
-    member self.Del(key: string) =
+    member _.Del(key: string) =
         let key = normkey (key) in headers <- headers |> List.filter (fun (k, _) -> normkey (k) = key)
 
     member self.ContentLength() =
@@ -68,7 +68,7 @@ type HttpHeadersBuilder() =
     let mutable lastseen = None
     let mutable headers = HttpHeaders()
 
-    member private self.MaybePop() =
+    member private _.MaybePop() =
         match lastseen with
         | Some(h, v) ->
             headers.Add h v
@@ -79,7 +79,7 @@ type HttpHeadersBuilder() =
         self.MaybePop()
         lastseen <- Some(key, value.Trim())
 
-    member self.PushContinuation(value: string) =
+    member _.PushContinuation(value: string) =
         match lastseen with
         | Some(h, v) -> lastseen <- Some(h, String.Format("{0} {1}", v, (value.Trim())))
         | _ -> raise InvalidHttpHeaderContinuation

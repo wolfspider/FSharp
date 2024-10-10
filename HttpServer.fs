@@ -26,7 +26,7 @@ type HttpClientHandler(server: HttpServer, peer: TcpClient) =
     let mutable handlers = []
 
     interface IDisposable with
-        member self.Dispose() =
+        member _.Dispose() =
             if not (isNull stream) then
                 noexn (fun () -> rawstream.Dispose())
 
@@ -39,7 +39,7 @@ type HttpClientHandler(server: HttpServer, peer: TcpClient) =
 
             noexn (fun () -> peer.Close())
 
-    member private self.SendLine(line: string) =
+    member private _.SendLine(line: string) =
         //let line = String.Format("{0}\r\n",line)
         //let bytes = Encoding.ASCII.GetBytes(line)
         let bspan =
@@ -77,7 +77,7 @@ type HttpClientHandler(server: HttpServer, peer: TcpClient) =
             [ ("Content-Type", "text/plain"); ("Connection", "close") ]
             (Encoding.ASCII.GetBytes((HttpCode.http_message code) + "\r\n"))
 
-    member private self.ResponseOfStream (fi: FileInfo) (stream: Stream) =
+    member private _.ResponseOfStream (fi: FileInfo) (stream: Stream) =
         let ctype =
             match server.Config.mimesmap.Lookup(Path.GetExtension(fi.FullName)) with
             | Some ctype -> ctype
@@ -200,7 +200,7 @@ and HttpServer(localaddr: IPEndPoint, config: HttpServerConfig) =
     let mutable socket: TcpListener = null
 
     interface IDisposable with
-        member self.Dispose() =
+        member _.Dispose() =
             if not (isNull socket) then
                 noexn (fun () -> socket.Stop())
 

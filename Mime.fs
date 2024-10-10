@@ -14,7 +14,7 @@ type MimeMap() =
     static member CanonizeExt(ext: string) =
         let ext = ext.ToLowerInvariant() in if ext.StartsWith(".") then ext else "." + ext
 
-    member self.Bind (ext: string) (mime: mime) =
+    member _.Bind (ext: string) (mime: mime) =
         let ext = MimeMap.CanonizeExt(ext) in
 
         if ext = "." then
@@ -22,7 +22,7 @@ type MimeMap() =
 
         mimes <- Map.add ext mime mimes
 
-    member self.Lookup(ext: string) = mimes.TryFind(MimeMap.CanonizeExt ext)
+    member _.Lookup(ext: string) = mimes.TryFind(MimeMap.CanonizeExt ext)
 
 let of_stream (stream: Stream) =
     let process_line =

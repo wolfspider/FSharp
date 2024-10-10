@@ -20,14 +20,14 @@ type HttpStreamReader(stream: Stream) =
     static member LF = Convert.ToByte('\n')
     static member CR = Convert.ToByte('\r')
 
-    member self.Stream = stream
+    member _.Stream = stream
 
     interface IDisposable with
-        member self.Dispose() =
+        member _.Dispose() =
             if not (isNull stream) then
-                Utils.noexn (fun () -> stream.Close())
+                noexn (fun () -> stream.Close())
 
-    member private self.EnsureAvailable() =
+    member private _.EnsureAvailable() =
 
         if position = available then
             begin
