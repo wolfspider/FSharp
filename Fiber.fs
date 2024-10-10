@@ -318,9 +318,9 @@ module Scheduler =
 
     let testasync (fiber, cancel) =
         async {
-            let sh = shared
-            //let s = TestScheduler(DateTime.UtcNow)
-            return! Fiber.toAsync sh fiber
+            //let sh = shared
+            let s = TestScheduler(DateTime.UtcNow)
+            return! Fiber.toAsync s fiber
         }
 
 
