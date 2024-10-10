@@ -214,7 +214,7 @@ and HttpServer(localaddr: IPEndPoint, config: HttpServerConfig) =
                     match canon, segment with
                     | _, "" -> canon
                     | _, "." -> canon
-                    | csegment :: ctail, ".." -> ctail
+                    | _ :: ctail, ".." -> ctail
                     | [], ".." -> []
                     | _, segment -> segment :: canon)
                 [] in
@@ -236,7 +236,6 @@ and HttpServer(localaddr: IPEndPoint, config: HttpServerConfig) =
             let cancel = Cancel()
             let! z = Scheduler.testasync (program, cancel)
             return z
-
         }
 
 

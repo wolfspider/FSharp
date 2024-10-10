@@ -202,49 +202,45 @@ module Fiber =
                                 if Interlocked.Exchange(&remaining, -1) > 0 then
                                     next None)))
 
+    // Example of Atom type with swap function
     type Atom<'T when 'T: not struct>(value: 'T) =
         let refCell = ref value
 
         let rec swap f =
             let currentValue = refCell.Value
-            let result = Interlocked.CompareExchange<'T>(refCell, f currentValue, currentValue)
+            let result = Interlocked.CompareExchange(refCell, f currentValue, currentValue)
 
             if obj.ReferenceEquals(result, currentValue) then
                 result
             else
-                Thread.SpinWait 20
+                delay (TimeSpan.FromTicks 20) |> ignore
                 swap f
-
+        //if obj.ReferenceEquals(result, currentValue) then result
+        //else Thread.SpinWait 20; swap f
         member _.Value = refCell.Value
         member _.Swap(f: 'T -> 'T) = swap f
 
     let atom value = new Atom<_>(value)
-
-    let (!) (atom: Atom<_>) = atom.Value
-
     let swap (atom: Atom<_>) (f: _ -> _) = atom.Swap f
 
-    // example
-
-    let counter = atom (fun () -> 0)
-
-    /// Blocks current execution thread, executing given Fiber, and returning result of execution.
+    // Blocking function example
     let blocking (s: IScheduler) (cancel: Cancel) (Fiber fn) =
-        use waiter = new ManualResetEventSlim(false)
-        let mutable res = None
+        //use waiter = new ManualResetEventSlim(false)
+        let rs = atom None
+
+        //let mutable res = None
 
         s.Schedule(fun () ->
             fn (s, cancel) (fun result ->
                 if not cancel.Cancelled then
-                    //swap counter (fun f -> (fun result () -> result + 1) <| f()) |> ignore
-                    Interlocked.Exchange(&res, Some result) |> ignore
+                    swap rs (fun _ -> Some result) |> ignore))
+        //Interlocked.Exchange(&res, Some result) |> ignore
+        //waiter.Set()))
 
-                waiter.Set()))
+        //waiter.Wait()
+        rs.Value
+    //res.Value
 
-        waiter.Wait()
-        res.Value
-    //let value = (!counter)()
-    //value
 
 
     /// Converts given Fiber into F# Async.
@@ -341,30 +337,31 @@ module FiberBuilder =
 
     let fib = FiberBuilder()
 
-//---------------------
-// run some actual code
-//---------------------
+let demo () : int =
+    //---------------------
+    // run some actual code
+    //---------------------
 
-let inline millis n = TimeSpan.FromMilliseconds(float n)
+    let inline millis n = TimeSpan.FromMilliseconds(float n)
 
-let program =
-    fib {
-        let c = fib { do! Fiber.delay (millis 3000) }
+    let program =
+        fib {
+            printf "Fiber Begin"
+            let c = fib { do! Fiber.delay (millis 3000) }
 
-        let a =
-            fib {
-                do! Fiber.delay (millis 5000)
-                return 3
-            }
-        //let! d = a |> Fiber.race (c)
-        let! b = a |> Fiber.timeout (millis 3000)
-        return b
-    }
-(*
-[<EntryPoint>]
-let main argv =
-  let cancel = Cancel ()
-  let result = Scheduler.test(cancel, program)
-  printfn "Result: %A" result
-  Console.ReadLine ()
-  0 // return an integer exit code*)
+            let a =
+                fib {
+                    do! Fiber.delay (millis 5000)
+                    printf "Fiber Ran"
+                    return 3
+                }
+            //let! d = a |> Fiber.race (c)
+            let! b = a |> Fiber.timeout (millis 3000)
+            return b
+        }
+
+    let cancel = Cancel()
+    let result = Scheduler.test (program, cancel)
+    printfn "Result: %A" result
+    Console.ReadLine() |> ignore
+    0 // return an integer exit code*)

@@ -4,6 +4,7 @@ open System
 open System.IO
 open System.Web
 open FSharp.Control
+open Fiber
 
 (* ------------------------------------------------------------------------ *)
 type String with
@@ -24,8 +25,17 @@ type Stream with
                 eof <- true
             else
                 begin
-                    output.WriteAsync(buffer, 0, rr) |> ignore
-                    position <- position + (int64 rr)
+                    let s =
+                        fib {
+                            output.WriteAsync(buffer, 0, rr) |> ignore
+                            output.FlushAsync() |> ignore
+                            position <- position + (int64 rr)
+                            return ()
+                        }
+
+                    let cancel = Cancel()
+
+                    Scheduler.testasync (s, cancel) |> ignore
                 end
 
         position
