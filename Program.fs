@@ -11,26 +11,24 @@ let try_read_mimes path =
         Mime.of_file path
     with :? IOException as e ->
         Console.WriteLine("cannot read mime-types: " + e.Message)
-        Mime.MimeMap ()
+        Mime.MimeMap()
 
 
-type options = {
-    rootdir   : string;
-    certdir   : string;
-    dhdir     : string;
-    localaddr : IPEndPoint;
-    localname : string;
-    remotename: string option;
-}
+type options =
+    { rootdir: string
+      certdir: string
+      dhdir: string
+      localaddr: IPEndPoint
+      localname: string
+      remotename: string option }
 
 let _ =
-    HttpLogger.HttpLogger.Level <- HttpLogger.INFO;
+    HttpLogger.HttpLogger.Level <- HttpLogger.INFO
 
-    let mimesmap   = try_read_mimes (Path.Combine("./htdocs", "mime.types")) in
+    let mimesmap = try_read_mimes (Path.Combine("./htdocs", "mime.types")) in
 
-        HttpServer.run {
-            docroot    = "./htdocs"  ;
-            mimesmap   = mimesmap         ;
-            localaddr  = IPEndPoint(IPAddress.Loopback, 2443);
-            servname   = "localhost";
-        }
+    HttpServer.run
+        { docroot = "./htdocs"
+          mimesmap = mimesmap
+          localaddr = IPEndPoint(IPAddress.Loopback, 2443)
+          servname = "localhost" }
