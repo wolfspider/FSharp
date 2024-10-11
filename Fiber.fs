@@ -1,5 +1,6 @@
 ﻿
-/// MIT License
+
+(* /// MIT License
 /// 
 /// Copyright (c) 2024 Bartosz Sypytkowski
 /// 
@@ -21,7 +22,11 @@
 /// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 /// SOFTWARE.
 ///
-////
+ * Modifications:
+ * --------------
+ * Modified by: <[WolfSpider]>
+ * Purpose: Added support for Atomics.
+ * Date: 2024-10-10 *)
 
 
 module Fiber
