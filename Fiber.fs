@@ -1,4 +1,6 @@
-﻿module Fiber
+﻿
+
+module Fiber
 
 open System
 open System.Threading
@@ -335,26 +337,51 @@ let demo () : int =
     // run some actual code
     //---------------------
 
+    let fib = FiberBuilder()
     let inline millis n = TimeSpan.FromMilliseconds(float n)
 
     let program =
         fib {
-            printf "Fiber Begin"
-            let c = fib { do! Fiber.delay (millis 3000) }
+            let c =
+                fib {
+                    do! Fiber.delay (millis 3000)
+                    return 2
+                }
 
             let a =
                 fib {
                     do! Fiber.delay (millis 5000)
-                    printf "Fiber Ran"
                     return 3
                 }
-            //let! d = a |> Fiber.race (c)
-            let! b = a |> Fiber.timeout (millis 3000)
+
+            let! d = a |> Fiber.race (c)
+
+            let ch =
+                match d with
+                | Choice1Of2 t -> t
+                | Choice2Of2 t -> t
+
+            let! b = a |> Fiber.timeout (millis 5001)
+             
+            printfn "Fiber Results: %A %A" b ch;
             return b
         }
 
     let cancel = Cancel()
     let result = Scheduler.test (program, cancel)
-    printfn "Result: %A" result
-    Console.ReadLine() |> ignore
+
+    let rs =
+        match result with
+        | Some(v) ->
+            match v with
+            | Some(vv) ->
+                match vv with
+                | Ok(vvv) -> vvv
+                | Error(_) -> 0
+            | None -> 0
+        | None -> 0
+
+
+    printfn "Scheduler Result: %A" rs
+    Console.ReadLine () |> ignore
     0 // return an integer exit code*)
