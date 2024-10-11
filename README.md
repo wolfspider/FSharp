@@ -23,6 +23,12 @@ miTLS original web server for miTLS-Flex [https://github.com/mitls/mitls-flex/tr
 
 CoreRT experimental AOT runtime [https://github.com/dotnet/corert]
 
-This now compiles in AOT mode with warnings so the project has trimming enabled. I am not sure what that is about but glad it actually builds and runs.
+AOT has finally become a thing and this project has also transitioned to Native AOT deployment [https://learn.microsoft.com/en-us/dotnet/core/deploying/native-aot]
+
+This now compiles in AOT mode with warnings so the project has trimming enabled. I am not sure what that is about but glad it actually builds and runs. Currently this produces a standalone binary ~5MB.
+
+I've also decided to introduce Clojure's Atoms. So basically, since fibers currently work within the context of Interlocked.Exchange a Fiber can be thought of as an atomic coroutine. Atoms are Fibers and Fibers are Atoms in that sense.
+
+The Closure implmentation can be found here: [https://www.fssnip.net/1V/title/Clojures-Atoms]
 
 Not to be used in production this is an experiment....still

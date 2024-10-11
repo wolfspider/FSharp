@@ -191,8 +191,7 @@ type HttpClientHandler(server: HttpServer, peer: TcpClient) =
 
                 reader <- new HttpStreamReader(stream)
 
-                while self.ReadAndServeRequest() do
-                    ()
+                while self.ReadAndServeRequest() do ()
             with e ->
                 Console.WriteLine(e.Message)
         finally
@@ -227,16 +226,9 @@ and HttpServer(localaddr: IPEndPoint, config: HttpServerConfig) =
 
     member private self.ClientHandler peer =
         async {
-            let peer = peer
-            let handler = new HttpClientHandler(self, peer)
-            //handler.Start()
 
-            let program =
-                fib {
-                    handler.Start() // Run the handler’s start
-                    return () // Explicitly return unit wrapped in Fiber
-                }
-
+            use handler = new HttpClientHandler(self, peer)
+            let program = fib { return handler.Start() }
             let cancel = Cancel()
             let! z = Scheduler.testasync (program, cancel)
             return z
@@ -254,26 +246,11 @@ and HttpServer(localaddr: IPEndPoint, config: HttpServerConfig) =
 
                 match client with
                 | Choice1Of2 client ->
-                    // Successfully accepted a client
-                    //do! Async.Sleep(1) // Equivalent to the 1ms delay
-
-                    // Handle the client
-                    let! peer =
-                        async {
-                            let! handler = self.ClientHandler client
-                            return handler
-                        }
-                        |> Async.Catch
+                    let! peer = async { do! self.ClientHandler client } |> Async.Catch
 
                     match peer with
-                    | Choice1Of2 peer ->
-                        // Successfully handled the client
-                        //printfn "Client handled successfully"
-                        ()
-                    | Choice2Of2 ex ->
-                        // Handle any exceptions from client handling
-                        printfn "Error handling client: %A" ex
-
+                    | Choice1Of2 peer -> ()
+                    | Choice2Of2 ex -> printfn "Error handling client: %A" ex
                 | Choice2Of2 ex ->
                     // Handle any exceptions from accepting client
                     printfn "Error accepting client: %A" ex
@@ -312,7 +289,6 @@ and HttpServer(localaddr: IPEndPoint, config: HttpServerConfig) =
         try
             socket.Start()
             self.AcceptAndServe()
-
 
         finally
             noexn (fun () -> socket.Stop())

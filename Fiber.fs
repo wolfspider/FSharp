@@ -226,23 +226,15 @@ module Fiber =
 
     // Blocking function example
     let blocking (s: IScheduler) (cancel: Cancel) (Fiber fn) =
-        //use waiter = new ManualResetEventSlim(false)
-        let rs = atom None
 
-        //let mutable res = None
+        let rs = atom None
 
         s.Schedule(fun () ->
             fn (s, cancel) (fun result ->
                 if not cancel.Cancelled then
                     swap rs (fun _ -> Some result) |> ignore))
-        //Interlocked.Exchange(&res, Some result) |> ignore
-        //waiter.Set()))
 
-        //waiter.Wait()
         rs.Value
-    //res.Value
-
-
 
     /// Converts given Fiber into F# Async.
     let toAsync s (Fiber call) =
@@ -304,7 +296,7 @@ module Scheduler =
         member __.UtcNow() = DateTime(currentTime)
 
         interface IScheduler with
-            member this.Schedule fn =
+            member _.Schedule fn =
                 schedule 0L fn
 
                 if not running then
