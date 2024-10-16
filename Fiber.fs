@@ -26,7 +26,11 @@
  * --------------
  * Modified by: <[WolfSpider]>
  * Purpose: Added support for Atomics.
- * Date: 2024-10-10 *)
+ * Date: 2024-10-10 
+ * --------------
+ * Modified by: <[WolfSpider]>
+ * Purpose: Update Scheduler with verified formally code.
+ * Date: 2024-10-16 *)
 
 
 module Fiber
@@ -299,42 +303,58 @@ module Scheduler =
 
                 t <- new Timer(callback, null, int timeout.TotalMilliseconds, Timeout.Infinite) }
 
-    type TestScheduler(now: DateTime) =
+    type Task = { Time: int64; Func: unit -> unit }
+
+    type TestScheduler(initialTime: DateTime) =
         let mutable running = false
-        let mutable currentTime = now.Ticks
-        let mutable timeline = Map.empty
-
-        let schedule delay fn =
+        let mutable currentTime = initialTime.Ticks
+        let mutable sortedTasks = []
+        
+        let insertTask delay fn =
             let at = currentTime + delay
-
-            timeline <-
-                match Map.tryFind at timeline with
-                | None -> Map.add at [ fn ] timeline
-                | Some fns -> Map.add at (fn :: fns) timeline
-
+            let newTask = { Time = at; Func = fn }
+            
+            // Partition the tasks into two lists: before and after the new task's time
+            let tasksBefore, tasksAfter = 
+                List.partition (fun task -> task.Time <= at) sortedTasks
+            
+            // Insert the new task between tasksBefore and tasksAfter
+            sortedTasks <- tasksBefore @ [newTask] @ tasksAfter
+        
         let rec run () =
-            match Seq.tryHead timeline with
-            | None -> running <- false
-            | Some(KeyValue(time, bucket)) ->
-                timeline <- Map.remove time timeline
+            match sortedTasks with
+            | [] -> running <- false
+            | { Time = time; Func = func } :: remainingTasks ->
+                // Gather all tasks scheduled for the same time
+                let sameTimeTasks, otherTasks = 
+                    List.partition (fun task -> task.Time = time) remainingTasks
+
+                // Update the sortedTasks list with only the tasks for future times
+                sortedTasks <- otherTasks
                 currentTime <- time
 
-                for fn in List.rev bucket do
-                    fn ()
+                // Execute all functions scheduled for this time
+                func ()
+                for task in sameTimeTasks do
+                    task.Func ()  // Execute each function
 
+                // Continue with the remaining tasks
                 run ()
-
+        
         member __.UtcNow() = DateTime(currentTime)
-
+        
         interface IScheduler with
             member _.Schedule fn =
-                schedule 0L fn
-
+                insertTask 0L fn
+        
                 if not running then
                     running <- true
                     run ()
+        
+            member _.Delay(timeout: TimeSpan, fn) = 
+                insertTask timeout.Ticks fn
 
-            member _.Delay(timeout: TimeSpan, fn) = schedule timeout.Ticks fn
+
 
     let testasync (fiber, cancel) =
         async {
