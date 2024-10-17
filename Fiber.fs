@@ -333,7 +333,7 @@ module Scheduler =
 
                 // Execute all functions scheduled for this time
                 for task in sameTimeTasks do
-                    task.Func()
+                    task.Func ()
 
                 // Execute the current task function
                 func ()
