@@ -1,6 +1,4 @@
-﻿
-
-(* /// MIT License
+﻿(* /// MIT License
 /// 
 /// Copyright (c) 2024 Bartosz Sypytkowski
 /// 
@@ -309,24 +307,24 @@ module Scheduler =
         let mutable running = false
         let mutable currentTime = initialTime.Ticks
         let mutable sortedTasks = []
-        
+
         let insertTask delay fn =
             let at = currentTime + delay
             let newTask = { Time = at; Func = fn }
-            
+
             // Partition the tasks into two lists: before and after the new task's time
-            let tasksBefore, tasksAfter = 
+            let tasksBefore, tasksAfter =
                 List.partition (fun task -> task.Time <= at) sortedTasks
-            
+
             // Insert the new task between tasksBefore and tasksAfter
-            sortedTasks <- tasksBefore @ [newTask] @ tasksAfter
-        
+            sortedTasks <- tasksBefore @ [ newTask ] @ tasksAfter
+
         let rec run () =
             match sortedTasks with
             | [] -> running <- false
             | { Time = time; Func = func } :: remainingTasks ->
                 // Gather all tasks scheduled for the same time
-                let sameTimeTasks, otherTasks = 
+                let sameTimeTasks, otherTasks =
                     List.partition (fun task -> task.Time = time) remainingTasks
 
                 // Update the sortedTasks list with only the tasks for future times
@@ -334,25 +332,26 @@ module Scheduler =
                 currentTime <- time
 
                 // Execute all functions scheduled for this time
-                func ()
                 for task in sameTimeTasks do
-                    task.Func ()  // Execute each function
+                    task.Func()
+
+                // Execute the current task function
+                func ()
 
                 // Continue with the remaining tasks
                 run ()
-        
+
         member __.UtcNow() = DateTime(currentTime)
-        
+
         interface IScheduler with
             member _.Schedule fn =
                 insertTask 0L fn
-        
+
                 if not running then
                     running <- true
                     run ()
-        
-            member _.Delay(timeout: TimeSpan, fn) = 
-                insertTask timeout.Ticks fn
+
+            member _.Delay(timeout: TimeSpan, fn) = insertTask timeout.Ticks fn
 
 
 
@@ -411,8 +410,8 @@ let demo () : int =
                 | Choice2Of2 t -> t
 
             let! b = a |> Fiber.timeout (millis 5001)
-             
-            printfn "Fiber Results: %A %A" b ch;
+
+            printfn "Fiber Results: %A %A" b ch
             return b
         }
 
@@ -432,5 +431,5 @@ let demo () : int =
 
 
     printfn "Scheduler Result: %A" rs
-    Console.ReadLine () |> ignore
+    Console.ReadLine() |> ignore
     0 // return an integer exit code*)
