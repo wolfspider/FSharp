@@ -28,6 +28,8 @@ type options =
 let _ =
     HttpLogger.HttpLogger.Level <- HttpLogger.INFO
 
+    //let _ = Fiber.demo()
+
     let mimesmap = try_read_mimes (Path.Combine("./htdocs", "mime.types")) in
 
     HttpServer.run

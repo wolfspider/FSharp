@@ -323,13 +323,26 @@ module Scheduler =
             match sortedTasks with
             | [] -> running <- false
             | { Time = time; Func = func } :: remainingTasks ->
+                let now = DateTime.UtcNow.Ticks
+
+                // Calculate the delay needed to wait for the next task
+                let delay = time - now
+
+                // If the next task is in the future, wait for that amount of time
+                if delay > 0L then
+                    // Convert delay from ticks to milliseconds (1 tick = 100ns)
+                    let milliseconds = delay / TimeSpan.TicksPerMillisecond
+                    Thread.Sleep(int milliseconds)
+
+                // Update current time to the task's time
+                currentTime <- time
+
                 // Gather all tasks scheduled for the same time
                 let sameTimeTasks, otherTasks =
                     List.partition (fun task -> task.Time = time) remainingTasks
 
                 // Update the sortedTasks list with only the tasks for future times
                 sortedTasks <- otherTasks
-                currentTime <- time
 
                 // Execute all functions scheduled for this time
                 for task in sameTimeTasks do
@@ -393,13 +406,15 @@ let demo () : int =
             let c =
                 fib {
                     do! Fiber.delay (millis 3000)
-                    return 2
+                    Console.WriteLine("3 Second Timeout")
+                    return 3
                 }
 
             let a =
                 fib {
-                    do! Fiber.delay (millis 5000)
-                    return 3
+                    do! Fiber.delay (millis 4000)
+                    Console.WriteLine("4 Second Timeout")
+                    return 4
                 }
 
             let! d = a |> Fiber.race (c)
@@ -409,7 +424,8 @@ let demo () : int =
                 | Choice1Of2 t -> t
                 | Choice2Of2 t -> t
 
-            let! b = a |> Fiber.timeout (millis 5001)
+            Console.WriteLine("4 Blocked against 5")
+            let! b = a |> Fiber.timeout (millis 5000)
 
             printfn "Fiber Results: %A %A" b ch
             return b
