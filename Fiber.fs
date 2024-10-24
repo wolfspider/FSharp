@@ -35,6 +35,7 @@ module Fiber
 
 open System
 open System.Threading
+open System.Threading.Tasks
 
 type FiberResult<'a> = Result<'a, exn> option
 
@@ -282,6 +283,7 @@ module Fiber =
 
 [<RequireQualifiedAccess>]
 module Scheduler =
+    open FSharp.Control
 
     /// Default environment, which is backed by .NET Thread pool.
     let shared =
@@ -332,8 +334,8 @@ module Scheduler =
                 if delay > 0L then
                     // Convert delay from ticks to milliseconds (1 tick = 100ns)
                     let milliseconds = delay / TimeSpan.TicksPerMillisecond
-                    Thread.Sleep(int milliseconds)
-
+                    Task.Delay(int milliseconds).Wait()
+                    
                 // Update current time to the task's time
                 currentTime <- time
 
