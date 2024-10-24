@@ -1,0 +1,147 @@
+namespace NSMain;
+
+entity Func {
+    invariant $lf != "";
+    field lf: String;
+
+    factory static enqueue(f: fn() -> String):
+    { lf: String }
+    {
+        return { lf = f() };
+    }
+
+    override method exe(): String
+    {
+        return this.lf;
+    }
+}
+
+concept Scheduler {
+    abstract method schedule(func: Func): Scheduler;
+    abstract method delay(timeout: Int, func: Func): Scheduler;
+}
+
+entity TestScheduler provides Scheduler {
+    field now: Int;
+    field currentTime: Int;
+    field timeline: Map<Int, List<Func>>;
+    field running: Bool;
+    field runlist: List<{time: Int, func: Func}>;
+    field sortedTasks: List<{time: Int, func: Func}>;
+
+    // Constructor
+    factory static new():
+    {
+        now: Int, 
+        currentTime: Int, 
+        timeline: Map<Int, List<Func>>, 
+        running: Bool, 
+        runlist: List<{time: Int, func: Func}>,
+        sortedTasks: List<{time: Int, func: Func}>
+    }
+    {
+        return {
+            now = 0,
+            currentTime = 0,
+            timeline = Map<Int, List<Func>>@{},
+            running = false,
+            runlist = List<{time: Int, func: Func}>@{},
+            sortedTasks = List<{time: Int, func: Func}>@{}
+        };
+    }
+
+    // Schedule function to add to the timeline
+    method usched(delay: Int, func: Func): TestScheduler {
+        
+        let at = this.currentTime + delay;
+        
+        let updatedTimeline = (this.timeline.has(at)) ? Map<Int, List<Func>>@{ 
+                this.timeline.keys().get(at) => 
+                this.timeline.get(at).append(List<Func>@{func})
+            } : Map<Int, List<Func>>@{ 
+                at => List<Func>@{func}
+            };
+
+        // Filter tasks that should come before and after the new task
+        let tasksBefore = this.sortedTasks.filter(fn(task) => task.time < at);
+        let tasksAfter = this.sortedTasks.filter(fn(task) => task.time >= at);
+
+        return this.update
+        (
+            timeline = updatedTimeline,
+            sortedTasks = tasksBefore
+            .append(List<{time: Int, func: Func}>@{{time=at,func=func}})
+            .append(tasksAfter)
+        );
+    }
+
+    // Run function to process scheduled functions
+    method run(): TestScheduler {
+        if (this.timeline.empty()) {
+            
+            //_debug("I'm empty");
+            return this.update
+            (
+                running = false
+            );
+        }
+
+        let r = this.update
+        (
+            currentTime = this.now,
+            runlist = this.sortedTasks,
+            sortedTasks = List<{time: Int, func: Func}>@{}
+        );
+
+        return r;
+    }
+
+    // Returns the current time
+    method utcnow(): Int {
+        return this.currentTime;
+    }
+
+    // Schedule immediately
+    method schedule(func: Func): TestScheduler {
+        let sch = this.usched(this.currentTime, func);
+
+        if (!this.running) {
+            let r = this.update
+            (
+                running = true,
+                sortedTasks = sch.sortedTasks
+            );
+            return r;
+        }
+
+        return sch;
+    }
+
+    // Delay schedule
+    method delay(timeout: Int, func: Func): TestScheduler 
+    {      
+        let sch = this.usched(timeout, func);
+        return sch;
+    }
+}
+
+entrypoint function main(): Any {
+    
+    // Schedule task1 to run immediately
+    let s = TestScheduler@new()
+        .schedule(Func@enqueue(fn() => "R1"))
+        .delay(8, Func@enqueue(fn() => "R2"))
+        .delay(2, Func@enqueue(fn() => "R3"))
+        .run();
+
+    let currentTime = s.utcnow();
+    
+    check currentTime == s.now;
+
+    check s.runlist.get(0).func.exe() == "R1";
+    check s.runlist.get(1).func.exe() == "R3";
+    check s.runlist.get(2).func.exe() == "R2";
+    
+    return [s.runlist, currentTime];
+}
+
