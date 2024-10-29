@@ -1,6 +1,9 @@
 # FSharp
 .Net Core FSharp Http Server based on miTLS
 
+# Platform
+Currently this works well on Linux only. Other platforms may have difficulties at this time. I would suggest for the other ones to try yanking all the async stuff back out. AOT only works on Linux as well. PRs are always welcome if somebody decides they want to improve the situation for other operating systems.
+
 I'm using this repo to learn F# and FP.
 
 So what can I say after all this time so many things have changed? I decided it was worth actually making this work during the
