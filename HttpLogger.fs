@@ -11,7 +11,7 @@ type level =
 type HttpLogger() =
     static let mutable loglevel: level = INFO
 
-    static member private lock = new Object()
+    static member private lock = Object()
 
     static member Level
         with get () = loglevel

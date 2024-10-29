@@ -24,12 +24,12 @@ type HttpHeaders() =
     member _.ToSeq() = headers |> List.rev |> Seq.ofList
 
     member _.Exists(key: string) =
-        let key = normkey (key) in headers |> List.exists (fun (k, _) -> normkey (k) = key)
+        let key = normkey key in headers |> List.exists (fun (k, _) -> normkey k = key)
 
     member _.Get(key: string) =
-        let key = normkey (key) in
+        let key = normkey key in
 
-        match headers |> List.tryFind (fun (k, _) -> normkey (k) = key) with
+        match headers |> List.tryFind (fun (k, _) -> normkey k = key) with
         | Some(_, value) -> Some value
         | None -> None
 
@@ -39,17 +39,17 @@ type HttpHeaders() =
         | Some x -> x
 
     member _.GetAll(key: string) =
-        let key = normkey (key) in headers |> List.filter (fun (k, _) -> normkey (k) = key)
+        let key = normkey key in headers |> List.filter (fun (k, _) -> normkey k = key)
 
     member _.Set (key: string) (value: string) =
-        let normed = normkey (key) in
-        headers <- headers |> List.filter (fun (k, _) -> normkey (k) <> normed)
+        let normed = normkey key in
+        headers <- headers |> List.filter (fun (k, _) -> normkey k <> normed)
         headers <- (key, value) :: headers
 
     member _.Add (key: string) (value: string) = headers <- (key, value) :: headers
 
     member _.Del(key: string) =
-        let key = normkey (key) in headers <- headers |> List.filter (fun (k, _) -> normkey (k) = key)
+        let key = normkey key in headers <- headers |> List.filter (fun (k, _) -> normkey k = key)
 
     member self.ContentLength() =
         match self.Get CONTENT_LENGTH with
@@ -81,7 +81,7 @@ type HttpHeadersBuilder() =
 
     member _.PushContinuation(value: string) =
         match lastseen with
-        | Some(h, v) -> lastseen <- Some(h, String.Format("{0} {1}", v, (value.Trim())))
+        | Some(h, v) -> lastseen <- Some(h, String.Format("{0} {1}", v, value.Trim()))
         | _ -> raise InvalidHttpHeaderContinuation
 
     member self.Headers =

@@ -12,7 +12,7 @@ exception InvalidHttpRequest of string
 exception NoHttpRequest
 
 type HttpStreamReader(stream: Stream) =
-    let (*---*) buffer: byte[] = Array.zeroCreate 65536
+    let (*---*) buffer: byte[] = Array.zeroCreate 8192
     let mutable position: int = 0
     let mutable available: int = 0
 
@@ -95,8 +95,8 @@ type HttpStreamReader(stream: Stream) =
                 elif line <> "" then
                     try
                         match line.Trim() with
-                        | Match "^(?<name>[a-zA-Z0-9-]+)\s*:\s*(?<value>.*)$" m -> headers.Push m.["name"] m.["value"]
-                        | Match "^\s+(?<value>.*)\s+$" m -> headers.PushContinuation m.["value"]
+                        | Match "^(?<name>[a-zA-Z0-9-]+)\s*:\s*(?<value>.*)$" m -> headers.Push m["name"] m["value"]
+                        | Match "^\s+(?<value>.*)\s+$" m -> headers.PushContinuation m["value"]
                         | _ -> isvalid.Value <- false
                     with InvalidHttpHeaderContinuation ->
                         isvalid.Value <- false
@@ -119,9 +119,9 @@ type HttpStreamReader(stream: Stream) =
 
         match httpcmd with
         | Match "^(?<method>[A-Z]+) (?<path>\S+) HTTP/(?<version>(:?\d+\.\d+))$" m ->
-            let version = httpversion_of_string m.["version"] in
-            let httpmth = m.["method"].ToUpperInvariant() in
-            let path = m.["path"].UrlDecode() in
+            let version = httpversion_of_string m["version"] in
+            let httpmth = m["method"].ToUpperInvariant() in
+            let path = m["path"].UrlDecode() in
             let headers = headers.Headers in
 
             { version = version

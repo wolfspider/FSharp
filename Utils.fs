@@ -58,8 +58,8 @@ let (|Match|_|) pattern input =
     if m.Success then
         Some(
             re.GetGroupNames()
-            |> Seq.map (fun n -> (n, m.Groups.[n]))
-            |> Seq.filter (fun (n, g) -> g.Success)
+            |> Seq.map (fun n -> (n, m.Groups[n]))
+            |> Seq.filter (fun (_, g) -> g.Success)
             |> Seq.map (fun (n, g) -> (n, g.Value))
             |> Map.ofSeq
         )

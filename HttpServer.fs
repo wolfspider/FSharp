@@ -84,7 +84,7 @@ type HttpClientHandler(server: HttpServer, peer: TcpClient) =
             | None -> "text/plain" in
 
         { code = HttpCode.HTTP_200
-          headers = HttpHeaders.OfList [ (HttpHeaders.CONTENT_TYPE, ctype) ]
+          headers = HttpHeaders.OfList [ (CONTENT_TYPE, ctype) ]
           body = HB_Stream(stream, fi.Length) }
 
 
@@ -119,7 +119,7 @@ type HttpClientHandler(server: HttpServer, peer: TcpClient) =
         try
             let request = reader.ReadRequest() in
 
-            match List.tryPick (fun handler -> handler (request)) handlers with
+            match List.tryPick (fun handler -> handler request) handlers with
             | Some status -> status
 
             | None ->
@@ -133,9 +133,9 @@ type HttpClientHandler(server: HttpServer, peer: TcpClient) =
                     try
                         self.ServeStatic request
                     with
-                    | :? System.IO.IOException as e -> raise e
+                    | :? IOException as e -> raise e
                     | HttpResponseExnException response -> response
-                    | e -> http_response_of_code HttpCode.HTTP_500 in
+                    | _ -> http_response_of_code HttpCode.HTTP_500 in
 
                 if close then
                     begin response.headers.Set "Connection" "close" end
@@ -249,7 +249,7 @@ and HttpServer(localaddr: IPEndPoint, config: HttpServerConfig) =
                     let! peer = async { do! self.ClientHandler client } |> Async.Catch
 
                     match peer with
-                    | Choice1Of2 peer -> ()
+                    | Choice1Of2 _ -> ()
                     | Choice2Of2 ex -> printfn "Error handling client: %A" ex
                 | Choice2Of2 ex ->
                     // Handle any exceptions from accepting client
@@ -274,7 +274,7 @@ and HttpServer(localaddr: IPEndPoint, config: HttpServerConfig) =
 
         // Keep the program running
         printfn "Server is running on port 2443. Press any key to stop."
-        System.Console.ReadKey() |> ignore
+        Console.ReadKey() |> ignore
 
         // Cancel the accept loop when a key is pressed
         cts.Cancel()

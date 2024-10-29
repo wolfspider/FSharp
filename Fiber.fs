@@ -426,7 +426,7 @@ let demo () : int =
                 | Choice1Of2 t -> t
                 | Choice2Of2 t -> t
 
-            Console.WriteLine("4 Blocked against 5")
+            Console.WriteLine("4000 Blocked against 5000")
             let! b = a |> Fiber.timeout (millis 5000)
 
             printfn "Fiber Results: %A %A" b ch
