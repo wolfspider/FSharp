@@ -260,5 +260,57 @@ let insertTask delay fn =
             sortedTasks <- tasksBefore @ [ newTask ] @ tasksAfter
 ```
 
+# Performance
+Performance is not stellar but allocations are tiny. It is still doing file I/O with every call. If everything is working right you should see this:
+
+![Perf Screen](perf/FSharp-Perf.png)
+
+The other part you cannot see (running on 11th gen Intel) for the sample page is this:
+
+```
+wrk -v -H 'Host: localhost' -H 'Accept: text/plain,text/html;q=0.9,application/xhtml+xml;q=0.9,application/xml;q=0.8,/;q=0.7' -H 'Connection: keep-alive' --latency -d 30s -c 400 --timeout 180s -t 12 http://localhost:2443/sample.html
+wrk debian/4.1.0-3build1 [epoll] Copyright (C) 2012 Will Glozer
+Running 30s test @ http://localhost:2443/sample.html
+  12 threads and 400 connections
+  Thread Stats   Avg      Stdev     Max   +/- Stdev
+    Latency    72.87ms    7.44ms 121.59ms   92.20%
+    Req/Sec   454.05     87.16   666.00     65.40%
+  Latency Distribution
+     50%   70.72ms
+     75%   72.82ms
+     90%   78.59ms
+     99%  107.99ms
+  162828 requests in 30.08s, 4.96GB read
+Requests/sec:   5413.20
+Transfer/sec:    168.78MB
+```
+I am fully aware that a typical C# .NET Core project with response caching turned on will do 800k-900k requests in that timeframe but it also uses 8x the CPU and 10x the memory. More explanations about this can be found here: [https://www.reddit.com/r/fsharp/comments/g64y9k/why_is_f_slower_than_c/]
+
+After running publish-
+
+```
+dotnet publish -r linux-x64 -c Release
+```
+Then things look a little more like this:
+
+```
+wrk -v -H 'Host: localhost' -H 'Accept: text/plain,text/html;q=0.9,application/xhtml+xml;q=0.9,application/xml;q=0.8,/;q=0.7' -H 'Connection: keep-alive' --latency -d 30s -c 400 --timeout 180s -t 12 http://localhost:2443/sample.html
+wrk debian/4.1.0-3build1 [epoll] Copyright (C) 2012 Will Glozer
+Running 30s test @ http://localhost:2443/sample.html
+  12 threads and 400 connections
+  Thread Stats   Avg      Stdev     Max   +/- Stdev
+    Latency    51.73ms    2.08ms  86.05ms   86.54%
+    Req/Sec   639.90     33.56   720.00     83.53%
+  Latency Distribution
+     50%   51.52ms
+     75%   52.47ms
+     90%   53.56ms
+     99%   59.36ms
+  229437 requests in 30.08s, 6.99GB read
+Requests/sec:   7627.07
+Transfer/sec:    237.81MB
+```
+*'Wisely and slow; they stumble that run fast'* -- William Shakespeare
+
 
 
