@@ -286,6 +286,31 @@ Transfer/sec:    168.78MB
 ```
 I am fully aware that a typical C# .NET Core project with response caching turned on will do 800k-900k requests in that timeframe but it also uses 8x the CPU and 10x the memory. More explanations about this can be found here: [https://www.reddit.com/r/fsharp/comments/g64y9k/why_is_f_slower_than_c/]
 
+After running publish-
+
+```
+dotnet publish -r linux-x64 -c Release
+```
+Then things look a little more like this:
+
+```
+wrk -v -H 'Host: localhost' -H 'Accept: text/plain,text/html;q=0.9,application/xhtml+xml;q=0.9,application/xml;q=0.8,/;q=0.7' -H 'Connection: keep-alive' --latency -d 30s -c 400 --timeout 180s -t 12 http://localhost:2443/sample.html
+wrk debian/4.1.0-3build1 [epoll] Copyright (C) 2012 Will Glozer
+Running 30s test @ http://localhost:2443/sample.html
+  12 threads and 400 connections
+  Thread Stats   Avg      Stdev     Max   +/- Stdev
+    Latency    51.73ms    2.08ms  86.05ms   86.54%
+    Req/Sec   639.90     33.56   720.00     83.53%
+  Latency Distribution
+     50%   51.52ms
+     75%   52.47ms
+     90%   53.56ms
+     99%   59.36ms
+  229437 requests in 30.08s, 6.99GB read
+Requests/sec:   7627.07
+Transfer/sec:    237.81MB
+```
+*'Wisely and slow; they stumble that run fast'* -- William Shakespeare
 
 
 
