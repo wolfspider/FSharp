@@ -1,7 +1,11 @@
 # FSharp
 .Net Core FSharp Http Server based on miTLS
 
-I'm using this repo to learn F# and FP.
+# Platform Info
+Currently this works well on *Linux* only. Other platforms may have difficulties at this time. AOT only works on Linux. PRs are always welcome if somebody decides they want to improve the situation for other operating systems. It builds on FreeBSD but in order to get it back to normal all the async needs to be ripped out. On Windows the initial response time is very quick but some inherent connection limit will time out connections at some point. I have done no testing on MacOS. 
+
+# Background
+I'm using this repo to learn F# and FP. This is more of a concept than a specific application and will be a reference implementation for other work.
 
 So what can I say after all this time so many things have changed? I decided it was worth actually making this work during the
 hurricane milton.
@@ -10,7 +14,7 @@ This project has been updated to .Net Core 8
 
 After getting the fibers to actually work I realized this web server's best traits are consistent and reliable
 performance with a slim number of dependencies. TLS has been ripped out and do not think I will get back to
-that. This is techinically how an old fashion web server performs line by line. It is great for debugging clients.
+that. This is technically how an old fashion web server performs line by line. It is great for debugging clients.
 Slamming this server should not slam the machine and performance could theoretically scale with the number schedulers.
 
 Fibers ZIO experiment code was written by Bartosz Sypytkowski [https://bartoszsypytkowski.com/building-custom-fibers-library-in-f/]
@@ -32,6 +36,12 @@ I've also decided to introduce Clojure's Atoms. So basically, since fibers curre
 The Closure implmentation can be found here: [https://www.fssnip.net/1V/title/Clojures-Atoms]
 
 Not to be used in production this is an experiment....still
+
+# Tuning
+
+Currently, the initial buffer size is being adjusted. It has just been reduced to the bare minimum with plans to find some good middle-ground.
+
+# Formal Methods
 
 The scheduler has been formally verified using TapeDeck from which the Fiber scheduling was modeled. This puts the code through no less than 3 different compilation strategies:
 
