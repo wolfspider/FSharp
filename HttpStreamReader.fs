@@ -1,6 +1,7 @@
 module HttpStreamReader
 
 open System
+open System.Buffers
 open System.IO
 open System.Text
 open HttpHeaders
@@ -12,7 +13,7 @@ exception InvalidHttpRequest of string
 exception NoHttpRequest
 
 type HttpStreamReader(stream: Stream) =
-    let (*---*) buffer: byte[] = Array.zeroCreate 8192
+    let (*---*) buffer: byte[] = ArrayPool<byte>.Shared.Rent(32768)
     let mutable position: int = 0
     let mutable available: int = 0
 

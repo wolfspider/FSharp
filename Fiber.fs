@@ -65,7 +65,7 @@ type Cancel(parent: Cancel) =
             let children' = children
 
             if
-                (obj.ReferenceEquals(children', Interlocked.CompareExchange(&children, child :: children', children')))
+                obj.ReferenceEquals(children', Interlocked.CompareExchange(&children, child :: children', children'))
             then
                 child
             else
@@ -222,7 +222,7 @@ module Fiber =
                         call (s, childCancel) (fun result ->
                             match result with
                             | Some(Ok success) ->
-                                successes.[i] <- success
+                                successes[i] <- success
 
                                 if c.Cancelled && Interlocked.Exchange(&remaining, -1) > 0 then
                                     next None
@@ -255,7 +255,7 @@ module Fiber =
         member _.Value = refCell.Value
         member _.Swap(f: 'T -> 'T) = swap f
 
-    let atom value = new Atom<_>(value)
+    let atom value = Atom<_>(value)
     let swap (atom: Atom<_>) (f: _ -> _) = atom.Swap f
 
     // Blocking function example
@@ -289,7 +289,7 @@ module Scheduler =
     let shared =
         { new IScheduler with
             member __.Schedule fn =
-                System.Threading.ThreadPool.QueueUserWorkItem(WaitCallback(ignore >> fn))
+                ThreadPool.QueueUserWorkItem(WaitCallback(ignore >> fn))
                 |> ignore
 
             member __.Delay(timeout: TimeSpan, fn) =
@@ -347,8 +347,9 @@ module Scheduler =
                 sortedTasks <- otherTasks
 
                 // Execute all functions scheduled for this time
-                for task in sameTimeTasks do
-                    task.Func ()
+                let _ =
+                    Parallel.ForEach(sameTimeTasks, fun task ->
+                        task.Func ())
 
                 // Execute the current task function
                 func ()
@@ -370,9 +371,9 @@ module Scheduler =
 
 
 
-    let testasync (fiber, cancel) =
+    let testasync (fiber, _cancel) =
         async {
-            //let sh = shared
+            let sh = shared
             let s = TestScheduler(DateTime.UtcNow)
             return! Fiber.toAsync s fiber
         }
@@ -385,7 +386,7 @@ module Scheduler =
 
 [<Struct>]
 type FiberBuilder =
-    member inline __.Zero = Fiber.success (Unchecked.defaultof<_>)
+    member inline __.Zero = Fiber.success Unchecked.defaultof<_>
     member inline __.ReturnFrom fib = fib
     member inline __.Return value = Fiber.success value
     member inline __.Bind(fib, fn) = Fiber.bind fn fib
@@ -419,7 +420,7 @@ let demo () : int =
                     return 4
                 }
 
-            let! d = a |> Fiber.race (c)
+            let! d = a |> Fiber.race c
 
             let ch =
                 match d with
@@ -443,7 +444,7 @@ let demo () : int =
             | Some(vv) ->
                 match vv with
                 | Ok(vvv) -> vvv
-                | Error(_) -> 0
+                | Error _ -> 0
             | None -> 0
         | None -> 0
 

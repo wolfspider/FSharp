@@ -106,7 +106,7 @@ type HttpClientHandler(server: HttpServer, peer: TcpClient) =
                 try
                     infos.Open(FileMode.Open, FileAccess.Read, FileShare.Read)
                 with :? IOException ->
-                    raise (HttpResponseExnWithCode HttpCode.HTTP_500) in
+                    raise (HttpResponseExnWithCode HttpCode.HTTP_500)
 
             self.ResponseOfStream infos input
         with

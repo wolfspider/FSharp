@@ -1,6 +1,7 @@
 module Utils
 
 open System
+open System.Buffers
 open System.IO
 open System.Web
 open FSharp.Control
@@ -13,7 +14,7 @@ type String with
 (* ------------------------------------------------------------------------ *)
 type Stream with
     member self.CopyTo(output: Stream, length: int64) : int64 =
-        let (*---*) buffer: byte[] = Array.zeroCreate (128 * 1024) in
+        let (*---*) buffer: byte[] = ArrayPool<byte>.Shared.Rent(128 * 1024) in
         let mutable position: int64 = (int64 0) in
         let mutable eof: bool = false in
 
