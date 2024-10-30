@@ -289,8 +289,7 @@ module Scheduler =
     let shared =
         { new IScheduler with
             member __.Schedule fn =
-                ThreadPool.QueueUserWorkItem(WaitCallback(ignore >> fn))
-                |> ignore
+                ThreadPool.QueueUserWorkItem(WaitCallback(ignore >> fn)) |> ignore
 
             member __.Delay(timeout: TimeSpan, fn) =
                 let mutable t = Unchecked.defaultof<Timer>
@@ -335,7 +334,7 @@ module Scheduler =
                     // Convert delay from ticks to milliseconds (1 tick = 100ns)
                     let milliseconds = delay / TimeSpan.TicksPerMillisecond
                     Task.Delay(int milliseconds).Wait()
-                    
+
                 // Update current time to the task's time
                 currentTime <- time
 
@@ -347,15 +346,8 @@ module Scheduler =
                 sortedTasks <- otherTasks
 
                 // Execute all functions scheduled for this time
-                let _ =
-                    Parallel.ForEach(sameTimeTasks, fun task ->
-                        task.Func ())
-
-                // Execute the current task function
-                func ()
-
-                // Continue with the remaining tasks
-                run ()
+                match Parallel.ForEach({ Func = func; Time = time } :: sameTimeTasks, (fun task -> task.Func())) with
+                | _ -> run ()
 
         member __.UtcNow() = DateTime(currentTime)
 
