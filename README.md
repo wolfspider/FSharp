@@ -1,6 +1,9 @@
 # FSharp
 .Net Core FSharp Http Server based on miTLS
 
+# News
+Work has begun porting this to Elixir which has been a real learning experiencing. After a long wait for the ASMJit powered runtime in Erlang the conversion process is now taking place. Once the some base functionality has been implemented expect a new repo to emerge. After a deep dive into the NetApp projects WarpCore and Quant this part of the code will replace the role of http-parser. This also means that TLS will be included at some point as well. The goal is to have a system where packet logging and things needed for TLS will be separated so that this web server can be run standalone or as part of the tooling.   
+
 # Platform Info
 Currently this works well on *Linux* only. Other platforms may have difficulties at this time. AOT only works on Linux. PRs are always welcome if somebody decides they want to improve the situation for other operating systems. It builds on FreeBSD but in order to get it back to normal all the async needs to be ripped out. On Windows the initial response time is very quick but some inherent connection limit will time out connections at some point. I have done no testing on MacOS. 
 
@@ -13,8 +16,8 @@ hurricane milton.
 This project has been updated to .Net Core 8
 
 After getting the fibers to actually work I realized this web server's best traits are consistent and reliable
-performance with a slim number of dependencies. TLS has been ripped out and do not think I will get back to
-that. This is technically how an old fashion web server performs line by line. It is great for debugging clients.
+performance with a slim number of dependencies. ~~TLS has been ripped out and do not think I will get back to
+that.~~ This is technically how an old fashion web server performs line by line. It is great for debugging clients.
 Slamming this server should not slam the machine and performance could theoretically scale with the number schedulers.
 
 Fibers ZIO experiment code was written by Bartosz Sypytkowski [https://bartoszsypytkowski.com/building-custom-fibers-library-in-f/]
