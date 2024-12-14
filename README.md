@@ -2,7 +2,9 @@
 .Net Core FSharp Http Server based on miTLS
 
 # News
-Work has begun porting this to Elixir which has been a real learning experiencing. After a long wait for the ASMJit powered runtime in Erlang the conversion process is now taking place. Once the base functionality has been implemented expect a new repo to emerge. After a deep dive into the NetApp projects WarpCore and Quant this part of the code will replace the role of http-parser. This also means that TLS will be included at some point as well. The goal is to have a system where packet logging and things needed for TLS will be separated so that this web server can be run standalone or as part of the tooling.  
+Work has begun porting this to Elixir which has been a real learning experiencing. After a long wait for the ASMJit powered runtime in Erlang the conversion process is now taking place. Once the base functionality has been implemented expect a new repo to emerge. After a deep dive into the NetApp projects WarpCore and Quant this part of the code will replace the role of http-parser. This also means that TLS will be included at some point as well. The goal is to have a system where packet logging and things needed for TLS will be separated so that this web server can be run standalone or as part of the tooling.
+
+You can get a sneak peek at Āra (pronounced ˈɛərə) right here: [https://github.com/wolfspider/ara]
 
 # Platform Info
 Currently this works well on *Linux* only. Other platforms may have difficulties at this time. AOT only works on Linux. PRs are always welcome if somebody decides they want to improve the situation for other operating systems. It builds on FreeBSD but in order to get it back to normal all the async needs to be ripped out. On Windows the initial response time is very quick but some inherent connection limit will time out connections at some point. I have done no testing on MacOS. 
