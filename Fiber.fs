@@ -363,12 +363,17 @@ module Scheduler =
 
 
 
+    // Single shared instance (no per-chunk "new TestScheduler")
+    let private testSched = TestScheduler(DateTime.UtcNow)
+
     let testasync (fiber, _cancel) =
         async {
-            let sh = shared
-            let s = TestScheduler(DateTime.UtcNow)
-            return! Fiber.toAsync s fiber
+            return! Fiber.toAsync testSched fiber
         }
+
+    // Helper: actually RUN it and wait for completion
+    let testwait (fiber, cancel) =
+        testasync (fiber, cancel) |> Async.RunSynchronously
 
 
     let test (fiber, cancel) =
@@ -378,10 +383,10 @@ module Scheduler =
 
 [<Struct>]
 type FiberBuilder =
-    member inline __.Zero = Fiber.success Unchecked.defaultof<_>
-    member inline __.ReturnFrom fib = fib
-    member inline __.Return value = Fiber.success value
-    member inline __.Bind(fib, fn) = Fiber.bind fn fib
+    member inline _.Zero = Fiber.success Unchecked.defaultof<_>
+    member inline _.ReturnFrom fib = fib
+    member inline _.Return value = Fiber.success value
+    member inline _.Bind(fib, fn) = Fiber.bind fn fib
 
 [<AutoOpen>]
 module FiberBuilder =

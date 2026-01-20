@@ -2,16 +2,15 @@ module HttpHeaders
 
 open System
 open System.Globalization
-
+open System.Collections.Generic
 
 let CONTENT_LENGTH = "Content-Length"
 let CONTENT_TYPE = "Content-Type"
 
-let normkey = fun (key: string) -> key.Trim().ToLowerInvariant()
-
 type HttpHeaders() =
     let mutable headers: (string * string) list = []
-
+    let index = Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+    
     static member OfList(headers: (string * string) list) =
         let aout = HttpHeaders() in
 
@@ -24,32 +23,34 @@ type HttpHeaders() =
     member _.ToSeq() = headers |> List.rev |> Seq.ofList
 
     member _.Exists(key: string) =
-        let key = normkey key in headers |> List.exists (fun (k, _) -> normkey k = key)
+        index.ContainsKey(key)
 
     member _.Get(key: string) =
-        let key = normkey key in
-
-        match headers |> List.tryFind (fun (k, _) -> normkey k = key) with
-        | Some(_, value) -> Some value
-        | None -> None
+        match index.TryGetValue(key) with
+        | true, value -> Some value
+        | _ -> None
 
     member self.GetDfl(key: string, dfl: string) =
         match self.Get(key) with
         | None -> dfl
         | Some x -> x
 
+
     member _.GetAll(key: string) =
-        let key = normkey key in headers |> List.filter (fun (k, _) -> normkey k = key)
+        headers |> List.filter (fun (k, _) -> String.Equals(k, key, StringComparison.OrdinalIgnoreCase))
 
-    member _.Set (key: string) (value: string) =
-        let normed = normkey key in
-        headers <- headers |> List.filter (fun (k, _) -> normkey k <> normed)
+    member _.Set(key: string)(value: string) =
+        headers <- headers |> List.filter (fun (k, _) -> not (String.Equals(k, key, StringComparison.OrdinalIgnoreCase)))
         headers <- (key, value) :: headers
+        index[key] <- value
 
-    member _.Add (key: string) (value: string) = headers <- (key, value) :: headers
+    member _.Add(key: string)(value: string) =
+        headers <- (key, value) :: headers
+        index[key] <- value
 
     member _.Del(key: string) =
-        let key = normkey key in headers <- headers |> List.filter (fun (k, _) -> normkey k = key)
+        headers <- headers |> List.filter (fun (k, _) -> not (String.Equals(k, key, StringComparison.OrdinalIgnoreCase)))
+        index.Remove(key) |> ignore
 
     member self.ContentLength() =
         match self.Get CONTENT_LENGTH with
@@ -61,28 +62,29 @@ type HttpHeaders() =
             | :? FormatException
             | :? OverflowException -> raise (FormatException())
 
-
 exception InvalidHttpHeaderContinuation
 
 type HttpHeadersBuilder() =
-    let mutable lastseen = None
-    let mutable headers = HttpHeaders()
+    let mutable lastseen : (string * string) option = None
+    let headers = HttpHeaders()
 
     member private _.MaybePop() =
         match lastseen with
         | Some(h, v) ->
             headers.Add h v
             lastseen <- None
-        | _ -> ()
+        | None -> ()
 
-    member self.Push (key: string) (value: string) =
+    member self.Push(key: string)(value: string) =
         self.MaybePop()
         lastseen <- Some(key, value.Trim())
 
     member _.PushContinuation(value: string) =
         match lastseen with
-        | Some(h, v) -> lastseen <- Some(h, String.Format("{0} {1}", v, value.Trim()))
-        | _ -> raise InvalidHttpHeaderContinuation
+        | Some(h, v) ->
+            lastseen <- Some(h, String.Format("{0} {1}", v, value.Trim()))
+        | None ->
+            raise InvalidHttpHeaderContinuation
 
     member self.Headers =
         self.MaybePop()

@@ -3,7 +3,6 @@ module Mime
 open System
 open System.IO
 open System.Text
-open System.Text.RegularExpressions
 open FSharp.Control
 
 type mime = string
@@ -12,40 +11,68 @@ type MimeMap() =
     let mutable mimes: Map<string, string> = Map.empty
 
     static member CanonizeExt(ext: string) =
-        let ext = ext.ToLowerInvariant() in if ext.StartsWith(".") then ext else "." + ext
+        let ext = ext.ToLowerInvariant()
+        if ext.StartsWith(".") then ext else "." + ext
 
-    member _.Bind (ext: string) (mime: mime) =
-        let ext = MimeMap.CanonizeExt(ext) in
+    member _.Bind(ext: string)(mime: mime) =
+        let ext = MimeMap.CanonizeExt(ext)
 
         if ext = "." then
-            begin raise (ArgumentException("cannot bind empty extension")) end
+            raise (ArgumentException("cannot bind empty extension"))
 
         mimes <- Map.add ext mime mimes
 
-    member _.Lookup(ext: string) = mimes.TryFind(MimeMap.CanonizeExt ext)
+    member _.Lookup(ext: string) =
+        mimes.TryFind(MimeMap.CanonizeExt ext)
+
+let inline sliceByRange (source: ReadOnlySpan<char>) (r: Range) =
+    let s = r.Start.GetOffset(source.Length)
+    let e = r.End.GetOffset(source.Length)
+    source.Slice(s, e - s)
+
+let tryParseMimeLine (line: string) : (string * string list) option =
+    if isNull line then None
+    else
+        let mutable span = line.AsSpan()
+
+        // strip comment
+        let hash = span.IndexOf('#')
+        if hash >= 0 then
+            span <- span.Slice(0, hash)
+
+        span <- span.Trim()
+
+        if span.IsEmpty then None
+        else
+            let seps = " \t".AsSpan()
+
+            // Use MemoryExtensions to avoid extension resolution issues in F#
+            let mutable it = MemoryExtensions.SplitAny(span, seps)
+
+            if not (it.MoveNext()) then None
+            else
+                let ctypeSpan = sliceByRange span it.Current
+                let exts = ResizeArray<string>()
+
+                while it.MoveNext() do
+                    let extSpan = sliceByRange span it.Current
+                    if not extSpan.IsEmpty then
+                        exts.Add(extSpan.ToString())
+
+                Some(ctypeSpan.ToString(), List.ofSeq exts)
 
 let of_stream (stream: Stream) =
-    let process_line =
-        fun line ->
-            match Regex.Replace(line, "#.*$", "").Trim() with
-            | "" -> None
-            | _ ->
-                match List.ofArray (Regex.Split(line, "\s+")) with
-                | [] -> failwith "MimeMap.of_stream"
-                | ctype :: exts -> Some(ctype, exts) in
-
     use reader = new StreamReader(stream, Encoding.ASCII)
-    let mime = MimeMap() in
+    let mime = MimeMap()
 
-    let _ =
-        Utils.IO.ReadAllLinesAsync reader
-        |> AsyncSeq.iterAsync (fun line ->
-            async {
-                match process_line line with
-                | Some(ctype, exts) -> exts |> List.iter (fun ext -> mime.Bind ext ctype)
-                | None -> ()
-            })
-        |> Async.RunSynchronously in
+    Utils.IO.ReadAllLinesAsync reader
+    |> AsyncSeq.iter (fun line ->
+        match tryParseMimeLine line with
+        | Some(ctype, exts) ->
+            exts |> List.iter (fun ext -> mime.Bind ext ctype)
+        | None -> ()
+    )
+    |> Async.RunSynchronously
 
     mime
 
