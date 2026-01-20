@@ -112,8 +112,7 @@ type HttpStreamReader(stream: Stream) =
     member private _.EnsureAvailable() =
         if position = available then
             position <- 0
-            let t = stream.ReadAsync(buffer, 0, buffer.Length)
-            available <- t.Result
+            available <- stream.Read(buffer, 0, buffer.Length)
 
         position < available
 
