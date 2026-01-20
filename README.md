@@ -8,7 +8,7 @@ You can get a sneak peek at Āra (pronounced ˈɛərə) right here: [https://git
 
 # Update (1/20/2026)
 
-A much needed refactoring has taken place. Ara reached a stopping point due to many more changes and philosophical differences I've had over a much longer period of time. So, in short- performance has jumped nearly 400%:
+A much needed refactoring has taken place. Ara reached a stopping point due to many more changes and philosophical differences I've had over a much longer period of time. So, in short- performance has jumped nearly 100%:
 
 ```
 ❯ wrk -v -H 'Host: localhost' -H 'Accept: text/plain,text/html;q=0.9,application/xhtml+xml;q=0.9,application/xml;q=0.8,/;q=0.7' -H 'Connection: keep-alive' --latency -d 30s -c 400 --timeout 180s -t 12 http://localhost:2443/sample.html
