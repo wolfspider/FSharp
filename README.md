@@ -6,6 +6,43 @@ Work has begun porting this to Elixir which has been a real learning experiencin
 
 You can get a sneak peek at Āra (pronounced ˈɛərə) right here: [https://github.com/wolfspider/ara]
 
+# Update (1/20/2026)
+
+A much needed refactoring has taken place. Ara reached a stopping point due to many more changes and philosophical differences I've had over a much longer period of time. So, in short- performance has jumped nearly 400%:
+
+```
+❯ wrk -v -H 'Host: localhost' -H 'Accept: text/plain,text/html;q=0.9,application/xhtml+xml;q=0.9,application/xml;q=0.8,/;q=0.7' -H 'Connection: keep-alive' --latency -d 30s -c 400 --timeout 180s -t 12 http://localhost:2443/sample.html
+wrk debian/4.1.0-3build1 [epoll] Copyright (C) 2012 Will Glozer
+Running 30s test @ http://localhost:2443/sample.html
+  12 threads and 400 connections
+  Thread Stats   Avg      Stdev     Max   +/- Stdev
+    Latency    28.31ms    1.77ms  38.03ms   88.75%
+    Req/Sec     1.17k    89.21     1.33k    67.36%
+  Latency Distribution
+     50%   28.04ms
+     75%   28.93ms
+     90%   30.19ms
+     99%   35.68ms
+  419036 requests in 30.02s, 12.76GB read
+Requests/sec:  13957.98
+Transfer/sec:    435.20MB
+```
+
+I think now those improvements can be carried over to Ara. More has happened on the networking side of things and so I now know a much more clear direction to go in. This is still the reference implementation but also an indicator of where things have changed over the years. Reasons why this approach can only be taken so far on this platform:
+
+ReadOnlySpan<char> (and Span<byte>, etc.) are ref structs (“byref-like” types).
+The CLI forbids them from being:
+
+* stored in heap objects
+
+* captured by closures
+
+* placed inside generic types like Option<'T>, lists, tuples, records, tasks, etc.
+
+So returning a span inside an option forces it to “escape” into a generic container, which Common IL disallows.
+
+That’s why it compiled only after it was changed to return strings (or indices/ranges) instead of spans. The difference has closed to exactly a factor equivalent to letting an uncontrolled threadpool grow up to 10 instances. We don't feel safe with the current "mainstream" API available which will push your cores up to >90% so this approach, especially when built natively, is more planetary.
+
 # Platform Info
 Currently this works well on *Linux* only. Other platforms may have difficulties at this time. AOT only works on Linux. PRs are always welcome if somebody decides they want to improve the situation for other operating systems. It builds on FreeBSD but in order to get it back to normal all the async needs to be ripped out. On Windows the initial response time is very quick but some inherent connection limit will time out connections at some point. I have done no testing on MacOS. 
 
