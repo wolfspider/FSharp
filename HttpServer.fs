@@ -40,13 +40,9 @@ type HttpClientHandler(server: HttpServer, peer: TcpClient) =
             noexn (fun () -> peer.Close())
 
     member private _.SendLine(line: string) =
-        //let line = String.Format("{0}\r\n",line)
-        //let bytes = Encoding.ASCII.GetBytes(line)
-        let bspan =
-            Span<byte>(Encoding.ASCII.GetBytes(String.Format("{0}\r\n", line))).ToArray()
+        let bytes = Encoding.ASCII.GetBytes(line + "\r\n")
+        stream.WriteAsync(bytes, 0, bytes.Length) |> ignore
 
-        (*HttpLogger.Debug ("--> " + line)*)
-        stream.WriteAsync(bspan, 0, bspan.Length) |> ignore
 
     member private self.SendStatus version code =
         self.SendLine(
@@ -68,7 +64,7 @@ type HttpClientHandler(server: HttpServer, peer: TcpClient) =
         self.SendLine ""
 
         if body.Length <> 0 then
-            stream.WriteAsync(body, 0, body.Length) |> ignore
+            stream.WriteAsync(body, 0, body.Length).GetAwaiter().GetResult()
 
     member private self.SendResponse version code =
         self.SendResponseWithBody
@@ -224,15 +220,19 @@ and HttpServer(localaddr: IPEndPoint, config: HttpServerConfig) =
 
         String.Join("/", Array.ofList (List.rev path))
 
-    member private self.ClientHandler peer =
+    member private self.ClientHandler (peer: TcpClient) : Async<unit> =
         async {
-
             use handler = new HttpClientHandler(self, peer)
-            let program = fib { return handler.Start() }
-            let cancel = Cancel()
-            let! z = Scheduler.testasync (program, cancel)
-            return z
+
+            // Run handler.Start() as a scheduled Fiber effect (NOT evaluated early)
+            let program : Fiber<unit> = Fiber.effect (fun () -> handler.Start())
+
+            // Choose the scheduler you want to run on:
+            // - Scheduler.shared = ThreadPool-backed
+            // - or your TestScheduler if you want deterministic stepping
+            do! Scheduler.testasync (program, Cancel())
         }
+
 
 
     member private self.AcceptAndServe() =

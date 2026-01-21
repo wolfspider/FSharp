@@ -269,6 +269,17 @@ module Fiber =
                     swap rs (fun _ -> Some result) |> ignore))
 
         rs.Value
+        
+    let effect (thunk: unit -> 'a) : Fiber<'a> =
+        Fiber <| fun (s, c) next ->
+            if c.Cancelled then next None
+            else
+                s.Schedule(fun () ->
+                    if c.Cancelled then next None
+                    else
+                        try next (Some(Ok(thunk())))
+                        with e -> next (Some(Error e))
+                )
 
     /// Converts given Fiber into F# Async.
     let toAsync s (Fiber call) =
@@ -374,8 +385,10 @@ module Scheduler =
     // Helper: actually RUN it and wait for completion
     let testwait (fiber, cancel) =
         testasync (fiber, cancel) |> Async.RunSynchronously
-
-
+    
+    let runAsyncWith (sched: IScheduler) fiber =
+        Fiber.toAsync sched fiber
+        
     let test (fiber, cancel) =
         let s = TestScheduler(DateTime.UtcNow)
         Fiber.blocking s cancel fiber
