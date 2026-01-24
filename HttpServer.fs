@@ -5,6 +5,7 @@ open System.IO
 open System.Net
 open System.Net.Sockets
 open System.Text
+open System.Threading
 open HttpHeaders
 open HttpStreamReader
 open HttpData
@@ -120,10 +121,15 @@ type HttpClientHandler(server: HttpServer, peer: TcpClient) =
 
             | None ->
                 let close =
-                    match request.headers.Get "Connection" with
-                    | Some v when v.ToLowerInvariant() = "close" -> true
-                    | Some v when v.ToLowerInvariant() = "keep-alive" -> true
-                    | _ -> request.version <> HTTPV_11 in
+                    match request.version with
+                    | HTTPV_10 ->
+                        match request.headers.Get "Connection" with
+                        | Some v when v.Equals("keep-alive", StringComparison.OrdinalIgnoreCase) -> false
+                        | _ -> true
+                    | _ ->
+                        match request.headers.Get "Connection" with
+                        | Some v when v.Equals("close", StringComparison.OrdinalIgnoreCase) -> true
+                        | _ -> false
 
                 let response =
                     try
@@ -222,15 +228,10 @@ and HttpServer(localaddr: IPEndPoint, config: HttpServerConfig) =
 
     member private self.ClientHandler (peer: TcpClient) : Async<unit> =
         async {
+            peer.NoDelay <- true
             use handler = new HttpClientHandler(self, peer)
-
-            // Run handler.Start() as a scheduled Fiber effect (NOT evaluated early)
-            let program : Fiber<unit> = Fiber.effect (fun () -> handler.Start())
-
-            // Choose the scheduler you want to run on:
-            // - Scheduler.shared = ThreadPool-backed
-            // - or your TestScheduler if you want deterministic stepping
-            do! Scheduler.testasync (program, Cancel())
+            do! Async.SwitchToThreadPool()
+            handler.Start()
         }
 
 

@@ -299,10 +299,10 @@ module Scheduler =
     /// Default environment, which is backed by .NET Thread pool.
     let shared =
         { new IScheduler with
-            member __.Schedule fn =
+            member _.Schedule fn =
                 ThreadPool.QueueUserWorkItem(WaitCallback(ignore >> fn)) |> ignore
 
-            member __.Delay(timeout: TimeSpan, fn) =
+            member _.Delay(timeout: TimeSpan, fn) =
                 let mutable t = Unchecked.defaultof<Timer>
 
                 let callback =
@@ -360,7 +360,7 @@ module Scheduler =
                 match Parallel.ForEach({ Func = func; Time = time } :: sameTimeTasks, (fun task -> task.Func())) with
                 | _ -> run ()
 
-        member __.UtcNow() = DateTime(currentTime)
+        member _.UtcNow() = DateTime(currentTime)
 
         interface IScheduler with
             member _.Schedule fn =
