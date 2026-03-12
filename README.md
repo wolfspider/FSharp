@@ -45,7 +45,7 @@ That’s why it compiled only after it was changed to return strings (or indices
 
 # Update (3/12/2026)
 
-We can do better than that actually. We the working keep-alive and new Resharp Regex engine performance has increased again and the latest native built benchmarks indicate that here:
+We can do better than that actually. Now with working keep-alive and the new Resharp Regex engine performance has increased again and the latest native built benchmarks indicate that here:
 
 ```
 ❯ wrk -v -H 'Host: localhost' -H 'Accept: text/plain,text/html;q=0.9,application/xhtml+xml;q=0.9,application/xml;q=0.8,/;q=0.7' -H 'Connection: keep-alive' --latency -d 30s -c 400 --timeout 180s -t 12 http://localhost:2443/sample.html
