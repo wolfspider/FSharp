@@ -43,6 +43,32 @@ So returning a span inside an option forces it to “escape” into a generic co
 
 That’s why it compiled only after it was changed to return strings (or indices/ranges) instead of spans. The difference has closed to exactly a factor equivalent to letting an uncontrolled threadpool grow up to 10 instances. We don't feel safe with the current "mainstream" API available which will push your cores up to >90% so this approach, especially when built natively, is more planetary.
 
+# Update (3/12/2026)
+
+We can do better than that actually. We the working keep-alive and new Resharp Regex engine performance has increased again and the latest native built benchmarks indicate that here:
+
+```
+❯ wrk -v -H 'Host: localhost' -H 'Accept: text/plain,text/html;q=0.9,application/xhtml+xml;q=0.9,application/xml;q=0.8,/;q=0.7' -H 'Connection: keep-alive' --latency -d 30s -c 400 --timeout 180s -t 12 http://localhost:2443/sample.html
+wrk debian/4.1.0-3build1 [epoll] Copyright (C) 2012 Will Glozer
+Running 30s test @ http://localhost:2443/sample.html
+  12 threads and 400 connections
+  Thread Stats   Avg      Stdev     Max   +/- Stdev
+    Latency    57.22us   53.64us   8.87ms   99.25%
+    Req/Sec    17.38k     1.70k   19.92k    71.10%
+  Latency Distribution
+     50%   52.00us
+     75%   57.00us
+     90%   66.00us
+     99%  102.00us
+  520367 requests in 30.10s, 15.84GB read
+Requests/sec:  17288.07
+Transfer/sec:    538.72MB
+```
+
+I really have conflicted feelings about jumping on a bandwagon but Resharp gives some interesting new capabilities which I did not expect:
+
+resharp-dotnet: [https://github.com/ieviev/resharp-dotnet]
+
 # Platform Info
 Currently this works well on *Linux* only. Other platforms may have difficulties at this time. AOT only works on Linux. PRs are always welcome if somebody decides they want to improve the situation for other operating systems. It builds on FreeBSD but in order to get it back to normal all the async needs to be ripped out. On Windows the initial response time is very quick but some inherent connection limit will time out connections at some point. I have done no testing on MacOS. 
 
