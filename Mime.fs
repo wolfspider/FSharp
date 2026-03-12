@@ -25,41 +25,34 @@ type MimeMap() =
     member _.Lookup(ext: string) =
         mimes.TryFind(MimeMap.CanonizeExt ext)
 
-let inline sliceByRange (source: ReadOnlySpan<char>) (r: Range) =
-    let s = r.Start.GetOffset(source.Length)
-    let e = r.End.GetOffset(source.Length)
-    source.Slice(s, e - s)
+module private MimeRegex =
+    // Compile once, reuse.
+    // This parser usually runs at startup, so the default options are enough.
+    let commentSuffix = Resharp.Regex(@"#.*\z")
+    let token = Resharp.Regex(@"[^\s#]+")
 
 let tryParseMimeLine (line: string) : (string * string list) option =
-    if isNull line then None
+    if isNull line then
+        None
     else
-        let mutable span = line.AsSpan()
+        // Remove inline comment, then trim.
+        let cleaned = MimeRegex.commentSuffix.Replace(line, "").Trim()
 
-        // strip comment
-        let hash = span.IndexOf('#')
-        if hash >= 0 then
-            span <- span.Slice(0, hash)
-
-        span <- span.Trim()
-
-        if span.IsEmpty then None
+        if cleaned = "" then
+            None
         else
-            let seps = " \t".AsSpan()
+            let matches = MimeRegex.token.Matches(cleaned)
 
-            // Use MemoryExtensions to avoid extension resolution issues in F#
-            let mutable it = MemoryExtensions.SplitAny(span, seps)
-
-            if not (it.MoveNext()) then None
+            if matches.Length = 0 then
+                None
             else
-                let ctypeSpan = sliceByRange span it.Current
-                let exts = ResizeArray<string>()
+                let ctype = matches[0].Value
 
-                while it.MoveNext() do
-                    let extSpan = sliceByRange span it.Current
-                    if not extSpan.IsEmpty then
-                        exts.Add(extSpan.ToString())
+                let exts =
+                    [ for i in 1 .. matches.Length - 1 do
+                          yield matches[i].Value ]
 
-                Some(ctypeSpan.ToString(), List.ofSeq exts)
+                Some(ctype, exts)
 
 let of_stream (stream: Stream) =
     use reader = new StreamReader(stream, Encoding.ASCII)
@@ -70,8 +63,7 @@ let of_stream (stream: Stream) =
         match tryParseMimeLine line with
         | Some(ctype, exts) ->
             exts |> List.iter (fun ext -> mime.Bind ext ctype)
-        | None -> ()
-    )
+        | None -> ())
     |> Async.RunSynchronously
 
     mime

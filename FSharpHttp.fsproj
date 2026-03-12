@@ -14,12 +14,15 @@
     <Compile Include="HttpCode.fs" />
     <Compile Include="HttpHeaders.fs" />
     <Compile Include="HttpData.fs" />
+    <Compile Include="HttpHeaderParser.fs" />
     <Compile Include="HttpStreamReader.fs" />
     <Compile Include="HttpServer.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
   <ItemGroup>
-    <PackageReference Include="FSharp.Control.AsyncSeq" Version="3.2.1" />
+    <PackageReference Include="FSharp.Control.AsyncSeq" Version="4.8.0" />
+    <PackageReference Include="Resharp" Version="1.0.3" />
     <PackageReference Include="System.Memory" Version="4.6.0" />
+    <PackageReference Update="FSharp.Core" Version="11.0.100" />
   </ItemGroup>
 </Project>

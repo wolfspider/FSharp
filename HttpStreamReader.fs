@@ -17,44 +17,6 @@ type HttpStreamReader(stream: Stream) =
     let mutable position: int = 0
     let mutable available: int = 0
     
-        // ---------- Fast parsing helpers (Span-based) ----------
-
-    let isUpperAZ (c: char) = c >= 'A' && c <= 'Z'
-
-    let isHeaderNameChar (c: char) =
-        (c >= 'a' && c <= 'z') ||
-        (c >= 'A' && c <= 'Z') ||
-        (c >= '0' && c <= '9') ||
-        c = '-'
-
-    let isValidHeaderName (name: ReadOnlySpan<char>) =
-        if name.IsEmpty then false
-        else
-            let mutable ok = true
-            let mutable i = 0
-            while ok && i < name.Length do
-                if not (isHeaderNameChar name.[i]) then ok <- false
-                i <- i + 1
-            ok
-
-    let tryParseHeaderLine (line: string) : Choice<(string * string), string> option =
-        let span = line.AsSpan()
-        if span.IsEmpty then None
-        else
-            // continuation line (obs-fold)
-            if span.[0] = ' ' || span.[0] = '\t' then
-                let v = span.Trim()
-                if v.IsEmpty then None else Some(Choice2Of2(v.ToString()))
-            else
-                let colon = span.IndexOf(':')
-                if colon <= 0 then None
-                else
-                    let nameSpan = span.Slice(0, colon).Trim()
-                    if not (isValidHeaderName nameSpan) then None
-                    else
-                        let valueSpan = span.Slice(colon + 1).Trim()
-                        Some(Choice1Of2(nameSpan.ToString(), valueSpan.ToString()))
-
     let tryParseRequestLine (line: string) : (string * string * string) option =
         if isNull line then None
         else
@@ -233,7 +195,7 @@ type HttpStreamReader(stream: Stream) =
                 isvalid.Value <- false
             elif line <> "" then
                 try
-                    match tryParseHeaderLine line with
+                    match HttpHeaderParser.tryParseHeaderLine line with
                     | Some(Choice1Of2(name, value)) ->
                         headersb.Push name value
                     | Some(Choice2Of2(value)) ->
