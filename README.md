@@ -69,6 +69,47 @@ I really have conflicted feelings about jumping on a bandwagon but Resharp gives
 
 resharp-dotnet: [https://github.com/ieviev/resharp-dotnet]
 
+# Update (9/15/2026)
+
+So, now fully outside of pure F# I have switched over to using C# connection handlers (if you can't, beat them join them!) under a new branch "concurrent-accept":
+
+F# Server:
+```
+❯ wrk -v -H 'Host: localhost' -H 'Accept: text/plain,text/html;q=0.9,application/xhtml+xml;q=0.9,application/xml;q=0.8,/;q=0.7' -H 'Connection: keep-alive' --latency -d 30s -c 400 --timeout 180s -t 12 http://localhost:2443/sample.html
+wrk debian/4.1.0-3build1 [epoll] Copyright (C) 2012 Will Glozer
+Running 30s test @ http://localhost:2443/sample.html
+  12 threads and 400 connections
+  Thread Stats   Avg      Stdev     Max   +/- Stdev
+    Latency     2.21ms    1.17ms  29.11ms   77.02%
+    Req/Sec    14.14k     0.99k   21.06k    71.85%
+  Latency Distribution
+     50%    1.99ms
+     75%    2.77ms
+     90%    3.62ms
+     99%    5.55ms
+  5069104 requests in 30.05s, 154.66GB read
+Requests/sec: 168699.05
+Transfer/sec:      5.15GB
+```
+C# Server:
+```
+❯ wrk -v -H 'Host: localhost' -H 'Accept: text/plain,text/html;q=0.9,application/xhtml+xml;q=0.9,application/xml;q=0.8,/;q=0.7' -H 'Connection: keep-alive' --latency -d 30s -c 400 --timeout 180s -t 12 http://localhost:5000/sample.html
+wrk debian/4.1.0-3build1 [epoll] Copyright (C) 2012 Will Glozer
+Running 30s test @ http://localhost:5000/sample.html
+  12 threads and 400 connections
+  Thread Stats   Avg      Stdev     Max   +/- Stdev
+    Latency     2.50ms    1.94ms  78.76ms   92.50%
+    Req/Sec    12.68k     1.58k   19.39k    83.72%
+  Latency Distribution
+     50%    2.22ms
+     75%    3.11ms
+     90%    3.99ms
+     99%    6.37ms
+  4547732 requests in 30.06s, 138.83GB read
+Requests/sec: 151272.10
+Transfer/sec:      4.62GB
+```
+
 # Platform Info
 Currently this works well on *Linux* only. Other platforms may have difficulties at this time. AOT only works on Linux. PRs are always welcome if somebody decides they want to improve the situation for other operating systems. It builds on FreeBSD but in order to get it back to normal all the async needs to be ripped out. On Windows the initial response time is very quick but some inherent connection limit will time out connections at some point. I have done no testing on MacOS. 
 
