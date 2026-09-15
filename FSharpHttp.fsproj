@@ -5,7 +5,11 @@
     <IsTrimmable>true</IsTrimmable>
     <PublishTrimmed>true</PublishTrimmed>
     <PublishAot>true</PublishAot>
+    <ServerGarbageCollection>true</ServerGarbageCollection>
   </PropertyGroup>
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
   <ItemGroup>
     <Compile Include="Fiber.fs" />
     <Compile Include="Utils.fs" />
@@ -14,8 +18,6 @@
     <Compile Include="HttpCode.fs" />
     <Compile Include="HttpHeaders.fs" />
     <Compile Include="HttpData.fs" />
-    <Compile Include="HttpHeaderParser.fs" />
-    <Compile Include="HttpStreamReader.fs" />
     <Compile Include="HttpServer.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
