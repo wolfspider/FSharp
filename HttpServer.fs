@@ -247,11 +247,41 @@ and HttpServer(localaddr: IPEndPoint, config: HttpServerConfig) =
 
                 match client with
                 | Choice1Of2 client ->
-                    let! peer = async { do! self.ClientHandler client } |> Async.Catch
+                    // A dedicated thread per connection, not a pool work item.
+                    //
+                    // Awaiting the handler ran the server one connection at a
+                    // time, because `handler.Start()` loops until the connection
+                    // closes. But simply `Async.Start`ing it moved the problem
+                    // rather than fixing it: a blocking loop then occupies a
+                    // *pool* thread for the life of the connection, and above
+                    // its minimum the pool injects about one thread every
+                    // 500 ms. A few hundred keep-alive clients starve it, and
+                    // the accept continuation is itself a pool work item, so the
+                    // server stops accepting and never recovers.
+                    //
+                    // Raising `SetMinThreads` does fix that, but it is a ceiling
+                    // rather than a solution -- it collapses again just past the
+                    // floor, and cost 39% at low concurrency here, since a large
+                    // floor disables the pool's hill-climbing.
+                    //
+                    // Owning the thread avoids the question. A blocking read
+                    // loop is not pool work and should not pretend to be. The
+                    // 256 KB stack is ample for this loop and keeps a few
+                    // hundred connections cheap.
+                    let worker =
+                        Thread(
+                            (fun () ->
+                                try
+                                    client.NoDelay <- true
+                                    use handler = new HttpClientHandler(self, client)
+                                    handler.Start()
+                                with ex ->
+                                    printfn "Error handling client: %A" ex),
+                            1024 * 1024
+                        )
 
-                    match peer with
-                    | Choice1Of2 _ -> ()
-                    | Choice2Of2 ex -> printfn "Error handling client: %A" ex
+                    worker.IsBackground <- true
+                    worker.Start()
                 | Choice2Of2 ex ->
                     // Handle any exceptions from accepting client
                     printfn "Error accepting client: %A" ex
