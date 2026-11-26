@@ -1,7 +1,29 @@
 # FSharp
 .Net Core FSharp Http Server based on miTLS
 
-# News
+# Latest News
+FreeBSD support has been added finally but that also means turning off AOT for now (on other platforms it should help). Speed has at least doubled maybe tripled by modelling concurrent-accept
+branch completely inside of FSharp. Error messages are more descriptive. We are finally now beating the naive C++ build of which the code for that is among my gists. Formal methods have become popularized at this point in time after Navier-Stokes so that is good to see. Before AI was used at all and became mainstream we were already formalizing things here.
+
+```
+➜  ~ wrk -v -H 'Host: localhost' -H 'Accept: text/plain,text/html;q=0.9,application/xhtml+xml;q=0.9,application/xml;q=0.8,/;q=0.7' -H 'Connection: keep-alive' --latency -d 30s -c 400 --timeout 180s -t 12 http://localhost:2443/sample.html
+wrk 4.2.0 [kqueue] Copyright (C) 2012 Will Glozer
+Running 30s test @ http://localhost:2443/sample.html
+  12 threads and 400 connections
+  Thread Stats   Avg      Stdev     Max   +/- Stdev
+    Latency     9.63ms   23.94ms 699.19ms   98.60%
+    Req/Sec     4.34k     1.44k   10.31k    61.73%
+  Latency Distribution
+     50%    6.34ms
+     75%    9.71ms
+     90%   13.80ms
+     99%   52.89ms
+  1555912 requests in 30.09s, 47.35GB read
+Requests/sec:  51701.86
+Transfer/sec:      1.57GB
+```
+
+# Dev Log
 Work has begun porting this to Elixir which has been a real learning experiencing. After a long wait for the ASMJit powered runtime in Erlang the conversion process is now taking place. Once the base functionality has been implemented expect a new repo to emerge. After a deep dive into the NetApp projects WarpCore and Quant this part of the code will replace the role of http-parser. This also means that TLS will be included at some point as well. The goal is to have a system where packet logging and things needed for TLS will be separated so that this web server can be run standalone or as part of the tooling.
 
 You can get a sneak peek at Āra (pronounced ˈɛərə) right here: [https://github.com/wolfspider/ara]
@@ -26,6 +48,20 @@ Running 30s test @ http://localhost:2443/sample.html
   419036 requests in 30.02s, 12.76GB read
 Requests/sec:  13957.98
 Transfer/sec:    435.20MB
+```
+For FreeBSD in particular run with this:
+
+```
+FSHARP_HTTP_BACKLOG=1024 \
+FSHARP_HTTP_MAX_CONNECTIONS=1024 \
+FSHARP_HTTP_WORKERS=32 \
+FSHARP_HTTP_MAX_WORKERS=32 \
+dotnet run -c Release
+```
+Connections are capped by default to 128 and so you may temporarily raise them with the following:
+
+```
+doas sysctl kern.ipc.soacceptqueue=1024
 ```
 
 I think now those improvements can be carried over to Ara. More has happened on the networking side of things and so I now know a much more clear direction to go in. This is still the reference implementation but also an indicator of where things have changed over the years. Reasons why this approach can only be taken so far on this platform:
@@ -127,10 +163,6 @@ that.~~ This is technically how an old fashion web server performs line by line.
 Slamming this server should not slam the machine and performance could theoretically scale with the number schedulers.
 
 Fibers ZIO experiment code was written by Bartosz Sypytkowski [https://bartoszsypytkowski.com/building-custom-fibers-library-in-f/]
-
-I would like to point out that I in no way condone any of the fallout which occured with any aformentioned projects nor their
-views. People are people, I cannot control them. This was developed before any of the lurid details spilled out into the
-open obviously. 
 
 miTLS original web server for miTLS-Flex [https://github.com/mitls/mitls-flex/tree/master/apps/HttpServer]
 
