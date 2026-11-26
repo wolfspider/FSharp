@@ -6,13 +6,14 @@ open System.Net
 open System.Net.Sockets
 open System.Text
 open System.Threading
+open System.Threading.Tasks
+open System.Collections.Concurrent
 open HttpHeaders
 open HttpStreamReader
 open HttpData
 open HttpLogger
 open Utils
 
-open Fiber
 
 exception HttpResponseExnException of HttpResponse
 
@@ -20,52 +21,28 @@ let HttpResponseExnWithCode =
     fun code -> HttpResponseExnException(http_response_of_code code)
 
 type HttpClientHandler(server: HttpServer, peer: TcpClient) =
-    let mutable rawstream: NetworkStream = null
-    let mutable stream: Stream = null
-    let mutable reader: HttpStreamReader = Unchecked.defaultof<HttpStreamReader>
-
+    let stream = peer.GetStream()
+    let reader = new HttpStreamReader(stream)
     let mutable handlers = []
 
     interface IDisposable with
         member _.Dispose() =
-            if not (isNull stream) then
-                noexn (fun () -> rawstream.Dispose())
+            (reader :> IDisposable).Dispose()
+            peer.Close()
 
-            if not (isNull rawstream) then
-                noexn (fun () -> rawstream.Dispose())
-
-            rawstream <- null
-            stream <- null
-            reader <- Unchecked.defaultof<HttpStreamReader>
-
-            noexn (fun () -> peer.Close())
-
-    member private _.SendLine(line: string) =
-        let bytes = Encoding.ASCII.GetBytes(line + "\r\n")
-        stream.WriteAsync(bytes, 0, bytes.Length) |> ignore
-
-
-    member private self.SendStatus version code =
-        self.SendLine(
-            String.Format(
-                "HTTP/{0} {1} {2}",
-                (string_of_httpversion version),
-                (HttpCode.code code),
-                (HttpCode.http_status code)
-            )
-        )
-
-    member private self.SendHeaders(headers: seq<string * string>) =
-        headers
-        |> Seq.iter (fun (h, v) -> self.SendLine(String.Format("{0}: {1}", h, v)))
+    member private _.SendHead version code (headers: seq<string * string>) =
+        let head = StringBuilder()
+        head.AppendFormat("HTTP/{0} {1} {2}\r\n", string_of_httpversion version, HttpCode.code code, HttpCode.http_status code) |> ignore
+        for name, value in headers do
+            head.Append(name).Append(": ").Append(value).Append("\r\n") |> ignore
+        head.Append("\r\n") |> ignore
+        let bytes = Encoding.ASCII.GetBytes(head.ToString())
+        stream.Write(bytes, 0, bytes.Length)
 
     member private self.SendResponseWithBody version code headers (body: byte[]) =
-        self.SendStatus version code
-        self.SendHeaders headers
-        self.SendLine ""
-
+        self.SendHead version code headers
         if body.Length <> 0 then
-            stream.WriteAsync(body, 0, body.Length).GetAwaiter().GetResult()
+            stream.Write(body, 0, body.Length)
 
     member private self.SendResponse version code =
         self.SendResponseWithBody
@@ -112,10 +89,8 @@ type HttpClientHandler(server: HttpServer, peer: TcpClient) =
         | :? NotSupportedException
         | :? ArgumentException -> raise (HttpResponseExnWithCode HttpCode.HTTP_404)
 
-    member private self.ReadAndServeRequest() =
+    member private self.ServeRequest(request: HttpRequest) =
         try
-            let request = reader.ReadRequest() in
-
             match List.tryPick (fun handler -> handler request) handlers with
             | Some status -> status
 
@@ -149,22 +124,10 @@ type HttpClientHandler(server: HttpServer, peer: TcpClient) =
                     | HB_Raw bytes ->
                         self.SendResponseWithBody request.version response.code (response.headers.ToSeq()) bytes
                     | HB_Stream(f, flen) ->
-                        self.SendStatus request.version response.code
-                        self.SendHeaders(response.headers.ToSeq())
-                        self.SendLine ""
-
-                        try
-                            let fa = Fiber.atom (fun () -> f)
-
-                            Fiber.swap fa (fun f ->
-                                if f().CopyTo(stream, flen) < flen then
-                                    failwith "ReadAndServeRequest: short-read"
-
-                                f // Return the result if needed, or modify as appropriate
-                            )
-                            |> fun _ -> noexn (fun () -> f.Close()) // Ignore the return, focus on side effects
-                        finally
-                            noexn (fun () -> stream.Flush())
+                        use file = f
+                        self.SendHead request.version response.code (response.headers.ToSeq())
+                        if file.CopyTo(stream, flen) < flen then
+                            failwith "ReadAndServeRequest: short-read"
                 end
                 //stream.Flush()
                 not close
@@ -178,36 +141,30 @@ type HttpClientHandler(server: HttpServer, peer: TcpClient) =
 
             false (* no keep-alive *)
 
-    member self.Start() =
-
+    member internal self.RunAsync(dispatch, stop: CancellationToken) = task {
+        peer.NoDelay <- true
+        peer.Client.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.KeepAlive, true)
+        let mutable keepAlive = true
         try
-            try
-                (*HttpLogger.Info
-                    (String.Format("new connection from [{0}]",peer.Client.RemoteEndPoint))*)
-                peer.Client.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.KeepAlive, true)
-                peer.Client.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true)
-                rawstream <- peer.GetStream()
+            while keepAlive && not stop.IsCancellationRequested do
+                let! request = reader.ReadRequestAsync(stop)
+                let! again = (dispatch (fun () -> self.ServeRequest(request)) : Task<bool>)
+                keepAlive <- again
+        with NoHttpRequest -> ()
+    }
 
-                (*HttpLogger.Info "Plaintext connection"*)
-                stream <- rawstream
-
-                reader <- new HttpStreamReader(stream)
-
-                while self.ReadAndServeRequest() do ()
-            with e ->
-                Console.WriteLine(e.Message)
-        finally
-            (*HttpLogger.Info "closing connection";*)
-            noexn (fun () -> peer.Close())
+    member self.Start() =
+        try self.RunAsync((fun work -> Task.FromResult(work())), CancellationToken.None).GetAwaiter().GetResult()
+        finally peer.Close()
 
 and HttpServer(localaddr: IPEndPoint, config: HttpServerConfig) =
     let config: HttpServerConfig = config
-    let mutable socket: TcpListener = null
+    let lifecycle = obj()
+    let mutable running: CancellationTokenSource option = None
 
     interface IDisposable with
         member _.Dispose() =
-            if not (isNull socket) then
-                noexn (fun () -> socket.Stop())
+            lock lifecycle (fun () -> running |> Option.iter (fun stop -> stop.Cancel()))
 
     member self.Config = config
 
@@ -226,74 +183,122 @@ and HttpServer(localaddr: IPEndPoint, config: HttpServerConfig) =
 
         String.Join("/", Array.ofList (List.rev path))
 
-    member private self.ClientHandler (peer: TcpClient) : Async<unit> =
-        async {
-            peer.NoDelay <- true
-            use handler = new HttpClientHandler(self, peer)
-            do! Async.SwitchToThreadPool()
-            handler.Start()
+    member self.Start(workerCount: int, maxWorkers: int) =
+        if workerCount < 1 then invalidArg "workerCount" "Expected at least one worker."
+        if maxWorkers < workerCount then invalidArg "maxWorkers" "Maximum must cover the initial pool."
+        let readSetting name fallback =
+            match Environment.GetEnvironmentVariable(name) with
+            | null -> fallback
+            | value ->
+                match Int32.TryParse(value) with
+                | true, n when n > 0 -> n
+                | _ -> invalidArg name "Expected a positive integer."
+        let backlog = readSetting "FSHARP_HTTP_BACKLOG" 1024
+        let maxClients = readSetting "FSHARP_HTTP_MAX_CONNECTIONS" 1024
+        use stop = new CancellationTokenSource()
+        let token = stop.Token
+        let listener = new TcpListener(localaddr)
+        use slots = new SemaphoreSlim(maxClients, maxClients)
+        use clients = new CountdownEvent(1)
+        use jobs = new BlockingCollection<unit -> unit>()
+        let workers = ResizeArray<Thread>()
+        let gate = obj()
+        let mutable outstanding = 0
+
+        let startWorker () =
+            let run () =
+                for job in jobs.GetConsumingEnumerable() do job()
+            let worker = Thread(ThreadStart(run), IsBackground = true)
+            worker.Name <- sprintf "http-request-%d" (workers.Count + 1)
+            worker.Start()
+            workers.Add(worker)
+
+        let dispatch work =
+            let doneRequest = TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously)
+            lock gate (fun () ->
+                if outstanding >= workers.Count && workers.Count < maxWorkers then
+                    try startWorker ()
+                    with ex -> eprintfn "Request worker: %s" ex.Message
+                outstanding <- outstanding + 1
+                jobs.Add(fun () ->
+                    try
+                        try
+                            token.ThrowIfCancellationRequested()
+                            doneRequest.SetResult(work())
+                        with ex -> doneRequest.SetException(ex)
+                    finally lock gate (fun () -> outstanding <- outstanding - 1)))
+            doneRequest.Task
+
+        let serve (client: TcpClient) = task {
+            try
+                try
+                    use peer = client
+                    use registration = token.Register(fun () -> peer.Close())
+                    use handler = new HttpClientHandler(self, peer)
+                    do! handler.RunAsync(dispatch, token)
+                with
+                | _ when token.IsCancellationRequested -> ()
+                (* | ex -> eprintfn "Client: %s" ex.Message *)
+                | ex -> Console.Error.WriteLine(sprintf "[%O] Client: %O" DateTimeOffset.UtcNow ex)
+            finally
+                slots.Release() |> ignore
+                clients.Signal() |> ignore
         }
 
+        let accept () = task {
+            try
+                while not token.IsCancellationRequested do
+                    do! slots.WaitAsync(token)
+                    try
+                        let! peer = listener.AcceptTcpClientAsync(token)
+                        clients.AddCount()
+                        serve peer |> ignore
+                    with :? SocketException as ex when not token.IsCancellationRequested ->
+                        slots.Release() |> ignore
+                        eprintfn "Accept: %s" ex.Message
+                        do! Task.Delay(100, token)
+            with
+            | _ when token.IsCancellationRequested -> ()
+        }
 
-
-    member private self.AcceptAndServe() =
-
-        let rec acceptLoop () =
-            async {
-                // Accept a client
-                let! client =
-                    Async.FromBeginEnd(socket.BeginAcceptTcpClient, socket.EndAcceptTcpClient)
-                    |> Async.Catch
-
-                match client with
-                | Choice1Of2 client ->
-                    let! peer = async { do! self.ClientHandler client } |> Async.Catch
-
-                    match peer with
-                    | Choice1Of2 _ -> ()
-                    | Choice2Of2 ex -> printfn "Error handling client: %A" ex
-                | Choice2Of2 ex ->
-                    // Handle any exceptions from accepting client
-                    printfn "Error accepting client: %A" ex
-
-                // Recursive call
-                return! acceptLoop ()
-            }
-
-        // Start the acceptLoop
-        let cts = new System.Threading.CancellationTokenSource()
-
-        Async.Start(
-            async {
-                try
-                    do! acceptLoop ()
-                with ex ->
-                    printfn "AcceptLoop terminated with exception: %A" ex
-            },
-            cts.Token
-        )
-
-        // Keep the program running
-        printfn "Server is running on port 2443. Press any key to stop."
-        Console.ReadKey() |> ignore
-
-        // Cancel the accept loop when a key is pressed
-        cts.Cancel()
-
-    member self.Start() =
-        if not (isNull socket) then
-            raise (InvalidOperationException())
-
-        //HttpLogger.Info (sprintf "Starting HTTP server on port %d" localaddr.Port)
-        socket <- new TcpListener(localaddr)
+        lock lifecycle (fun () ->
+            if running.IsSome then invalidOp "Server already running."
+            listener.Server.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true)
+            listener.Server.LingerState <- LingerOption(false, 0)
+            listener.Start(backlog)
+            running <- Some stop)
 
         try
-            socket.Start()
-            self.AcceptAndServe()
-
+            lock gate (fun () -> for _ in 1 .. workerCount do startWorker ())
+            let accepting = accept ()
+            try
+                printfn "Listening on %O; backlog requested %d, max connections %d, request workers %d..%d." localaddr backlog maxClients workerCount maxWorkers
+                Console.ReadKey() |> ignore
+            finally
+                stop.Cancel()
+                listener.Stop()
+                accepting.GetAwaiter().GetResult()
         finally
-            noexn (fun () -> socket.Stop())
-            socket <- null
+            stop.Cancel()
+            listener.Stop()
+            clients.Signal() |> ignore
+            clients.Wait()
+            jobs.CompleteAdding()
+            for worker in workers do worker.Join()
+            lock lifecycle (fun () -> running <- None)
+
+    member self.Start(workerCount: int) = self.Start(workerCount, workerCount)
+
+    member self.Start() =
+        let readCount name fallback =
+            match Environment.GetEnvironmentVariable(name) with
+            | null -> fallback
+            | value ->
+                match Int32.TryParse(value) with
+                | true, n when n > 0 -> n
+                | _ -> invalidArg name "Expected a positive integer."
+        let initial = readCount "FSHARP_HTTP_WORKERS" 32
+        self.Start(initial, readCount "FSHARP_HTTP_MAX_WORKERS" (max initial 128))
 
 let run =
     fun config ->

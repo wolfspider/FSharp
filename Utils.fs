@@ -6,7 +6,6 @@ open System.IO
 open System.Text
 open System.Web
 open FSharp.Control
-open Fiber
 
 (* ------------------------------------------------------------------------ *)
 type String with
@@ -22,22 +21,13 @@ type Stream with
         try
             while not eof && (position < length) do
                 let remaining = min (int64 buffer.Length) (length - position)
-                let rr = self.ReadAsync(buffer, 0, int remaining).Result
+                let rr = self.Read(buffer, 0, int remaining)
 
                 if rr = 0 then
                     eof <- true
                 else
-                    // Run ONE fiber step, but ensure the WriteAsync completes
-                    let s =
-                        fib {
-                            // IMPORTANT: wait for the write to finish
-                            output.WriteAsync(buffer, 0, rr).GetAwaiter().GetResult()
-                            position <- position + int64 rr
-                            return ()
-                        }
-
-                    let cancel = Cancel()
-                    Scheduler.testwait (s, cancel) |> ignore
+                    output.Write(buffer, 0, rr)
+                    position <- position + int64 rr
 
             position
         finally

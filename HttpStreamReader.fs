@@ -71,156 +71,76 @@ type HttpStreamReader(stream: Stream) =
                 noexn (fun () -> stream.Close())
             ArrayPool<byte>.Shared.Return(buffer)
 
-    member private _.EnsureAvailable() =
-        if position = available then
-            position <- 0
-            available <- stream.Read(buffer, 0, buffer.Length)
+    static member private DecodeLine(bytes: Span<byte>) =
+        let length =
+            if bytes.Length > 0 && bytes.[bytes.Length - 1] = 13uy then bytes.Length - 1
+            else bytes.Length
+        Encoding.ASCII.GetString(Span<byte>.op_Implicit(bytes.Slice(0, length)))
 
-        position < available
+    member private _.ReadLineAsync(stop: Threading.CancellationToken) = task {
+        let mutable fragments: byte[] = null
+        let mutable used = 0
 
-    member private self.ReadLine() : string =
-        // If we have no data at all, it's EOF
-        if not (self.EnsureAvailable()) then
-            null
-        else
-            let CR = 13uy
-            let LF = 10uy
-
-            // Common case: line fits in the current buffer -> no copying
-            let span0 = Span<byte>(buffer, position, available - position)
-            let nl0 = span0.IndexOf(LF)
-
-            if nl0 >= 0 then
-                // line ends in this buffer
-                let mutable len = nl0
-
-                // trim trailing '\r' if present
-                if len > 0 && span0.[len - 1] = CR then
-                    len <- len - 1
-
-                // validate ASCII
-                for i = 0 to len - 1 do
-                    if span0.[i] > 127uy then
-                        raise (DecoderFallbackException())
-
-                let s = Encoding.ASCII.GetString(buffer, position, len)
-                position <- position + nl0 + 1 // consume '\n'
-                s
-
+        // Span values stay within this synchronous scan of the current buffer.
+        let scan () =
+            let bytes = buffer.AsSpan(position, available - position)
+            let lf = bytes.IndexOf(10uy)
+            let count = if lf >= 0 then lf else bytes.Length
+            let part = bytes.Slice(0, count)
+            if part.IndexOfAnyInRange(128uy, 255uy) >= 0 then raise (DecoderFallbackException())
+            position <- position + count + (if lf >= 0 then 1 else 0)
+            if lf >= 0 && isNull fragments then HttpStreamReader.DecodeLine(part)
             else
-                // Slow path: line spans buffers -> accumulate into pooled temp
-                let mutable tmp = ArrayPool<byte>.Shared.Rent(4096)
-                let mutable tmpLen = 0
-                let mutable doneLine = false
-                let mutable sawAny = false
+                let needed = Checked.(+) used count
+                if isNull fragments || fragments.Length < needed then
+                    let next = ArrayPool<byte>.Shared.Rent(needed)
+                    if not (isNull fragments) then
+                        fragments.AsSpan(0, used).CopyTo(next.AsSpan())
+                        ArrayPool<byte>.Shared.Return(fragments)
+                    fragments <- next
+                part.CopyTo(fragments.AsSpan(used))
+                used <- needed
+                if lf >= 0 then HttpStreamReader.DecodeLine(fragments.AsSpan(0, used)) else null
 
-                let inline ensureCapacity (need: int) =
-                    if need > tmp.Length then
-                        let newSize = max (tmp.Length * 2) need
-                        let tmp2 = ArrayPool<byte>.Shared.Rent(newSize)
-                        Buffer.BlockCopy(tmp, 0, tmp2, 0, tmpLen)
-                        ArrayPool<byte>.Shared.Return(tmp)
-                        tmp <- tmp2
+        let mutable line: string = null
+        let mutable eof = false
+        try
+            while isNull line && not eof do
+                if position = available then
+                    let! count = stream.ReadAsync(buffer.AsMemory(), stop)
+                    position <- 0
+                    available <- count
+                if available > 0 then line <- scan ()
+                else eof <- true
+            if eof && used > 0 then return HttpStreamReader.DecodeLine(fragments.AsSpan(0, used))
+            else return line
+        finally
+            if not (isNull fragments) then ArrayPool<byte>.Shared.Return(fragments)
+    }
 
-                try
-                    while not doneLine do
-                        if not (self.EnsureAvailable()) then
-                            // EOF
-                            doneLine <- true
-                        else
-                            let span = Span<byte>(buffer, position, available - position)
-                            let nl = span.IndexOf(LF)
-
-                            if nl >= 0 then
-                                // copy bytes up to '\n'
-                                let chunkLen = nl
-                                if chunkLen > 0 then
-                                    sawAny <- true
-                                    ensureCapacity (tmpLen + chunkLen)
-
-                                    // validate + copy
-                                    for i = 0 to chunkLen - 1 do
-                                        let b = span.[i]
-                                        if b > 127uy then raise (DecoderFallbackException())
-                                        tmp.[tmpLen + i] <- b
-
-                                    tmpLen <- tmpLen + chunkLen
-
-                                // consume through '\n'
-                                position <- position + nl + 1
-                                doneLine <- true
-                            else
-                                // no '\n' here, copy all remaining bytes
-                                let chunkLen = span.Length
-                                if chunkLen > 0 then
-                                    sawAny <- true
-                                    ensureCapacity (tmpLen + chunkLen)
-
-                                    for i = 0 to chunkLen - 1 do
-                                        let b = span.[i]
-                                        if b > 127uy then raise (DecoderFallbackException())
-                                        tmp.[tmpLen + i] <- b
-
-                                    tmpLen <- tmpLen + chunkLen
-
-                                // consume all available
-                                position <- available
-
-                    // If we hit EOF and never collected anything, return null
-                    if not sawAny && tmpLen = 0 then
-                        null
-                    else
-                        // trim trailing '\r'
-                        if tmpLen > 0 && tmp.[tmpLen - 1] = CR then
-                            tmpLen <- tmpLen - 1
-
-                        Encoding.ASCII.GetString(tmp, 0, tmpLen)
-
-                finally
-                    ArrayPool<byte>.Shared.Return(tmp)
-
-    // ---------- ReadRequest ----------
-
-    member self.ReadRequest() =
-        let mutable httpcmd = self.ReadLine()
+    member self.ReadRequestAsync(stop: Threading.CancellationToken) = task {
+        let! first = self.ReadLineAsync(stop)
+        if isNull first then raise NoHttpRequest
+        let mutable httpcmd = first
         let headersb = HttpHeadersBuilder()
-        let isvalid = ref true
-
-        // header loop
-        let rec readheaders () =
-            let line = self.ReadLine()
-
-            if isNull line then
-                // EOF before blank line terminator -> invalid request
-                isvalid.Value <- false
-            elif line <> "" then
+        let mutable complete = false
+        while not complete do
+            let! line = self.ReadLineAsync(stop)
+            if isNull line then raise NoHttpRequest
+            elif line = "" then complete <- true
+            else
                 try
                     match HttpHeaderParser.tryParseHeaderLine line with
-                    | Some(Choice1Of2(name, value)) ->
-                        headersb.Push name value
-                    | Some(Choice2Of2(value)) ->
-                        headersb.PushContinuation value
-                    | None ->
-                        isvalid.Value <- false
-                with InvalidHttpHeaderContinuation ->
-                    isvalid.Value <- false
-
-                readheaders ()
-
-        if isNull httpcmd then
-            isvalid.Value <- false
-            httpcmd <- ""
-
-        // IMPORTANT: actually consume headers
-        readheaders ()
-
-        if not isvalid.Value then
-            httpcmd <- ""
+                    | Some(Choice1Of2(name, value)) -> headersb.Push name value
+                    | Some(Choice2Of2(value)) -> headersb.PushContinuation value
+                    | None -> httpcmd <- ""
+                with InvalidHttpHeaderContinuation -> httpcmd <- ""
 
         let headers = headersb.Headers
 
-        match tryParseRequestLine httpcmd with
-        | Some(methodStr, path, verStr) ->
+        return
+          match tryParseRequestLine httpcmd with
+          | Some(methodStr, path, verStr) ->
             let version = httpversion_of_string verStr
             let httpmth = methodStr.ToUpperInvariant()
 
@@ -229,8 +149,13 @@ type HttpStreamReader(stream: Stream) =
               path = path
               headers = headers }
 
-        | None ->
+          | None ->
             { version = httpversion_of_string ""
               mthod = ""
               path = ""
               headers = headers }
+
+    }
+
+    member self.ReadRequest() =
+        self.ReadRequestAsync(Threading.CancellationToken.None).GetAwaiter().GetResult()
