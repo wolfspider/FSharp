@@ -1,4 +1,4 @@
-﻿(* /// MIT License
+(* /// MIT License
 /// 
 /// Copyright (c) 2024 Bartosz Sypytkowski
 /// 
@@ -281,6 +281,47 @@ module Fiber =
                         with e -> next (Some(Error e))
                 )
 
+    /// Resume a suspended I/O operation on the fiber's scheduler.
+    let awaitTask (start: unit -> Task<'a>) : Fiber<'a> =
+        Fiber <| fun (scheduler, cancel) next ->
+            if cancel.Cancelled then next None
+            else
+                let operation =
+                    try Ok(start())
+                    with ex -> Error ex
+                match operation with
+                | Error ex -> next (Some(Error ex))
+                | Ok pending ->
+                    let awaiter = pending.ConfigureAwait(false).GetAwaiter()
+                    let resume () =
+                        scheduler.Schedule(fun () ->
+                            let result =
+                                try Some(Ok(awaiter.GetResult()))
+                                with ex -> Some(Error ex)
+                            next (if cancel.Cancelled then None else result))
+                    if awaiter.IsCompleted then resume ()
+                    else awaiter.OnCompleted(Action(resume))
+
+    /// Release resources after the last continuation, including failed I/O.
+    let finallyDo cleanup (body: unit -> Fiber<'a>) =
+        Fiber <| fun env next ->
+            let owner = atom (Some cleanup)
+            let finish result =
+                // Claim cleanup atomically. Run the effect outside the CAS retry loop.
+                match swap owner (fun _ -> None) with
+                | None -> ()
+                | Some release ->
+                    let finalResult =
+                        try
+                            release()
+                            result
+                        with ex -> Some(Error ex)
+                    next finalResult
+            try
+                let (Fiber run) = body()
+                run env finish
+            with ex -> finish (Some(Error ex))
+
     /// Converts given Fiber into F# Async.
     let toAsync s (Fiber call) =
         Async.FromContinuations
@@ -334,7 +375,8 @@ module Scheduler =
         let rec run () =
             match sortedTasks with
             | [] -> running <- false
-            | { Time = time; Func = func } :: remainingTasks ->
+            | first :: remainingTasks ->
+                let time = first.Time
                 let now = DateTime.UtcNow.Ticks
 
                 // Calculate the delay needed to wait for the next task
@@ -356,9 +398,12 @@ module Scheduler =
                 // Update the sortedTasks list with only the tasks for future times
                 sortedTasks <- otherTasks
 
-                // Execute all functions scheduled for this time
-                match Parallel.ForEach({ Func = func; Time = time } :: sameTimeTasks, (fun task -> task.Func())) with
-                | _ -> run ()
+                // A single ready continuation is already on a scheduler worker.
+                match sameTimeTasks with
+                | [] -> first.Func()
+                | others ->
+                    Parallel.ForEach(first :: others, (fun task -> task.Func())) |> ignore
+                run ()
 
         member _.UtcNow() = DateTime(currentTime)
 

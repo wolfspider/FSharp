@@ -5,6 +5,9 @@ open System.Buffers
 open System.IO
 open System.Text
 open System.Web
+open System.Threading
+open System.Threading.Tasks
+open Fiber
 open FSharp.Control
 
 (* ------------------------------------------------------------------------ *)
@@ -33,6 +36,20 @@ type Stream with
         finally
             ArrayPool<byte>.Shared.Return(buffer)
 
+
+    member input.CopyToFiber(output: Stream, length: int64, stop: CancellationToken) =
+        let buffer = ArrayPool<byte>.Shared.Rent(128 * 1024)
+        let rec copy remaining = fib {
+            if remaining = 0L then return ()
+            else
+                let count = int (min remaining (int64 buffer.Length))
+                let! read = Fiber.awaitTask (fun () -> input.ReadAsync(buffer, 0, count, stop))
+                if read = 0 then return! Fiber.fail (EndOfStreamException("Short file read"))
+                else
+                    do! Fiber.awaitTask (fun () -> task { do! output.WriteAsync(buffer, 0, read, stop) })
+                    return! copy (remaining - int64 read)
+        }
+        Fiber.finallyDo (fun () -> ArrayPool<byte>.Shared.Return(buffer)) (fun () -> copy length)
 
 (* ------------------------------------------------------------------------ *)
 let noexn =
